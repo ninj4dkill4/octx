@@ -12,8 +12,11 @@
   "files": [
     "bin/"
   ],
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/ninj4dkill4/octx.git"
+  },
   "publishConfig": {
-    "access": "public",
-    "provenance": true
+    "access": "public"
   }
 }

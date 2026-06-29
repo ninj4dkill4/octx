@@ -14,7 +14,7 @@ const packageDirs = [
 
 for (const packageDir of packageDirs) {
   console.log(`publishing ${packageDir}`);
-  const result = spawnSync("npm", ["publish", "--provenance", "--access", "public"], {
+  const result = spawnSync("npm", ["publish", "--access", "public"], {
     cwd: path.join(root, packageDir),
     stdio: "inherit"
   });

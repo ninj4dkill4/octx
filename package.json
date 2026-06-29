@@ -34,7 +34,6 @@
   },
   "homepage": "https://github.com/ninj4dkill4/octx#readme",
   "publishConfig": {
-    "access": "public",
-    "provenance": true
+    "access": "public"
   }
 }
