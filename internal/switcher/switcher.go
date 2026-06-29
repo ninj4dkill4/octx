@@ -83,7 +83,11 @@ func resolvePaths(opts Options) (config.Paths, error) {
 }
 
 func applySSH(project config.Project, currentPath string) error {
+	currentPath = config.ExpandPath(currentPath)
 	if project.SSHConfig == "" {
+		if err := os.Remove(currentPath); err != nil && !os.IsNotExist(err) {
+			return err
+		}
 		return nil
 	}
 
@@ -92,7 +96,6 @@ func applySSH(project config.Project, currentPath string) error {
 		return fmt.Errorf("ssh config %q: %w", source, err)
 	}
 
-	currentPath = config.ExpandPath(currentPath)
 	if err := os.MkdirAll(filepath.Dir(currentPath), 0o700); err != nil {
 		return err
 	}
@@ -107,6 +110,7 @@ func applySSH(project config.Project, currentPath string) error {
 
 func writeExport(b *strings.Builder, key, value string) {
 	if value == "" {
+		fmt.Fprintf(b, "unset %s\n", key)
 		return
 	}
 	fmt.Fprintf(b, "export %s=%s\n", key, shellQuote(value))

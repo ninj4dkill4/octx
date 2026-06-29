@@ -64,3 +64,53 @@ func TestShellExports(t *testing.T) {
 		t.Fatalf("missing AWS_PROFILE export: %s", output)
 	}
 }
+
+func TestSwitchClearsOptionalSSHConfig(t *testing.T) {
+	dir := t.TempDir()
+	oldSSHConfig := filepath.Join(dir, "old-ssh")
+	if err := os.WriteFile(oldSSHConfig, []byte("Host old\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	configFile := filepath.Join(dir, "config.yaml")
+	if err := os.WriteFile(configFile, []byte(`
+projects:
+  - code: no-ssh
+    name: No SSH
+`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	stateFile := filepath.Join(dir, "state.yaml")
+	sshCurrent := filepath.Join(dir, "ssh-current")
+	if err := os.Symlink(oldSSHConfig, sshCurrent); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := Switch("no-ssh", Options{
+		ConfigFile: configFile,
+		StateFile:  stateFile,
+		SSHCurrent: sshCurrent,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := os.Lstat(sshCurrent); !os.IsNotExist(err) {
+		t.Fatalf("ssh current still exists after switching to project without ssh_config: %v", err)
+	}
+}
+
+func TestShellExportsUnsetOptionalProfiles(t *testing.T) {
+	output := ShellExports(config.Project{
+		Code: "no-profiles",
+	})
+	for _, want := range []string{
+		"export OPSCTX_PROJECT='no-profiles'",
+		"unset AWS_PROFILE",
+		"unset CODEX_PROFILE",
+	} {
+		if !strings.Contains(output, want) {
+			t.Fatalf("missing %q in shell exports: %s", want, output)
+		}
+	}
+}

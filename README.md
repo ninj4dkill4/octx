@@ -11,8 +11,9 @@ Phase 1 switches by project code only. Projects may still represent environments
 ## Features
 
 - Fast project picker in the terminal.
-- Exports `AWS_PROFILE`, `CODEX_PROFILE`, and `OPSCTX_PROJECT`.
-- Updates an SSH include symlink for the selected project.
+- Exports `OPSCTX_PROJECT`.
+- Exports or unsets `AWS_PROFILE` and `CODEX_PROFILE`.
+- Updates or clears an SSH include symlink for the selected project.
 - Stores the last selected project in local state.
 - Ships as an npm package with native Go binaries for Linux and macOS.
 
@@ -93,6 +94,8 @@ projects:
     ssh_config: ~/.ssh/config.d/payment
 ```
 
+Only `code` is required. `aws_profile`, `codex_profile`, and `ssh_config` are optional. If an optional profile is omitted, `octx` unsets the matching environment variable during switch. If `ssh_config` is omitted, `octx` removes the generated SSH include target.
+
 Add this once to `~/.ssh/config`:
 
 ```sshconfig
@@ -116,10 +119,10 @@ octx current
 After selecting a project, `octx`:
 
 - exports `OPSCTX_PROJECT`
-- exports `AWS_PROFILE`
-- exports `CODEX_PROFILE`
+- exports or unsets `AWS_PROFILE`
+- exports or unsets `CODEX_PROFILE`
 - writes `~/.config/opsctx/state.yaml`
-- updates `~/.config/opsctx/ssh-current` to point to the configured project SSH config
+- updates `~/.config/opsctx/ssh-current` to point to the configured project SSH config, or removes it when no `ssh_config` is configured
 
 `CODEX_PROFILE` is intentionally just an environment variable. The `codex` shell wrapper maps it to:
 
@@ -162,8 +165,8 @@ Packages:
 Publish a new version by pushing a semver tag:
 
 ```sh
-git tag v0.1.3
-git push origin v0.1.3
+git tag vX.Y.Z
+git push origin vX.Y.Z
 ```
 
 The workflow builds native binaries, prepares package manifests from the tag version, runs dry-run packs, and publishes to npm.
