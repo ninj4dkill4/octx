@@ -1,0 +1,40 @@
+{
+  "name": "@ninj4dkill4/octx",
+  "version": "0.1.0",
+  "description": "Switch devops terminal context by project code.",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "octx": "bin/octx.js"
+  },
+  "files": [
+    "bin/",
+    "README.md"
+  ],
+  "scripts": {
+    "build:npm": "node scripts/build-npm.mjs",
+    "prepare:npm": "node scripts/prepare-npm-packages.mjs",
+    "publish:npm": "node scripts/publish-npm.mjs"
+  },
+  "optionalDependencies": {
+    "@ninj4dkill4/octx-darwin-arm64": "0.1.0",
+    "@ninj4dkill4/octx-darwin-x64": "0.1.0",
+    "@ninj4dkill4/octx-linux-arm64": "0.1.0",
+    "@ninj4dkill4/octx-linux-x64": "0.1.0"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/ninj4dkill4/octx.git"
+  },
+  "bugs": {
+    "url": "https://github.com/ninj4dkill4/octx/issues"
+  },
+  "homepage": "https://github.com/ninj4dkill4/octx#readme",
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  }
+}

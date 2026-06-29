@@ -13,19 +13,17 @@ Projects may have environments such as `dev`, `stg`, `uat`, and `prd`, but Phase
 ## Install
 
 ```bash
-go install ./cmd/octx
+npm install -g @ninj4dkill4/octx
 ```
 
-Add the Go bin directory and shell wrappers to `~/.zshrc`:
+Add the shell wrappers to `~/.zshrc`:
 
 ```zsh
-export PATH="$HOME/go/bin:$PATH"
-
 octx() {
   if [[ $# -eq 0 ]]; then
-    eval "$("$HOME/go/bin/octx" --shell)"
+    eval "$(command octx --shell)"
   else
-    "$HOME/go/bin/octx" "$@"
+    command octx "$@"
   fi
 }
 
@@ -47,6 +45,28 @@ source ~/.zshrc
 The `octx` wrapper is required because a child process cannot export environment variables into the current shell by itself.
 
 The `codex` wrapper is required because Codex CLI uses `--profile <name>`; it does not read `CODEX_PROFILE` directly.
+
+## Release
+
+This repo publishes npm packages with npm Trusted Publishing from GitHub Actions.
+
+Required npm trusted publisher settings:
+
+- Repository: `ninj4dkill4/octx`
+- Workflow file: `release-npm.yml`
+- Packages:
+  - `@ninj4dkill4/octx`
+  - `@ninj4dkill4/octx-linux-x64`
+  - `@ninj4dkill4/octx-linux-arm64`
+  - `@ninj4dkill4/octx-darwin-x64`
+  - `@ninj4dkill4/octx-darwin-arm64`
+
+Publish by pushing a semver tag:
+
+```bash
+git tag v0.1.0
+git push origin v0.1.0
+```
 
 ## Initialize Config
 

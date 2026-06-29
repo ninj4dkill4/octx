@@ -1,0 +1,48 @@
+name: Release npm
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.25.x"
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Test
+        run: go test ./...
+
+      - name: Build npm binaries
+        run: node scripts/build-npm.mjs
+
+      - name: Prepare npm packages
+        run: node scripts/prepare-npm-packages.mjs
+
+      - name: Dry-run npm packs
+        run: |
+          npm pack --dry-run
+          npm pack --dry-run ./npm/linux-x64
+          npm pack --dry-run ./npm/linux-arm64
+          npm pack --dry-run ./npm/darwin-x64
+          npm pack --dry-run ./npm/darwin-arm64
+
+      - name: Publish to npm
+        run: node scripts/publish-npm.mjs
