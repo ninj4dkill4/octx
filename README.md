@@ -16,7 +16,7 @@ Projects may have environments such as `dev`, `stg`, `uat`, and `prd`, but Phase
 go install ./cmd/octx
 ```
 
-Add the Go bin directory and shell wrapper to `~/.zshrc`:
+Add the Go bin directory and shell wrappers to `~/.zshrc`:
 
 ```zsh
 export PATH="$HOME/go/bin:$PATH"
@@ -28,6 +28,14 @@ octx() {
     "$HOME/go/bin/octx" "$@"
   fi
 }
+
+codex() {
+  if [[ -n "${CODEX_PROFILE:-}" ]]; then
+    "$HOME/.local/bin/codex" --profile "$CODEX_PROFILE" "$@"
+  else
+    "$HOME/.local/bin/codex" "$@"
+  fi
+}
 ```
 
 Reload the shell:
@@ -36,7 +44,9 @@ Reload the shell:
 source ~/.zshrc
 ```
 
-The wrapper is required because a child process cannot export environment variables into the current shell by itself.
+The `octx` wrapper is required because a child process cannot export environment variables into the current shell by itself.
+
+The `codex` wrapper is required because Codex CLI uses `--profile <name>`; it does not read `CODEX_PROFILE` directly.
 
 ## Initialize Config
 
@@ -65,6 +75,18 @@ projects:
     aws_profile: payment-devops
     codex_profile: payment
     ssh_config: ~/.ssh/config.d/payment
+```
+
+`codex_profile` maps to a Codex profile file:
+
+```text
+~/.codex/<codex_profile>.config.toml
+```
+
+For example, `codex_profile: core` uses:
+
+```text
+~/.codex/core.config.toml
 ```
 
 ## SSH Setup
@@ -97,6 +119,18 @@ It also updates:
 
 - State file: `~/.config/opsctx/state.yaml`
 - SSH include target: `~/.config/opsctx/ssh-current`
+
+After that, run Codex normally:
+
+```bash
+codex
+```
+
+The `codex` shell wrapper will call:
+
+```bash
+~/.local/bin/codex --profile "$CODEX_PROFILE"
+```
 
 Show current project:
 
