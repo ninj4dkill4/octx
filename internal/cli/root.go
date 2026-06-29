@@ -6,9 +6,9 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
-	"github.com/vanle3/opsctx/internal/config"
-	"github.com/vanle3/opsctx/internal/switcher"
-	opsTUI "github.com/vanle3/opsctx/internal/tui"
+	"github.com/ninj4dkill4/octx/internal/config"
+	"github.com/ninj4dkill4/octx/internal/switcher"
+	opsTUI "github.com/ninj4dkill4/octx/internal/tui"
 )
 
 type rootOptions struct {

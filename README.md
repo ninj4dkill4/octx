@@ -1,22 +1,38 @@
 # octx
 
-`octx` switches devops terminal context by project code.
+[![Release npm](https://github.com/ninj4dkill4/octx/actions/workflows/release-npm.yml/badge.svg)](https://github.com/ninj4dkill4/octx/actions/workflows/release-npm.yml)
+[![npm version](https://img.shields.io/npm/v/%40ninj4dkill4%2Foctx.svg)](https://www.npmjs.com/package/@ninj4dkill4/octx)
+[![license](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-Phase 1 switches:
+`octx` is a small terminal context switcher for DevOps work. Pick a project once, then keep AWS, Codex, and SSH aligned in the current shell.
 
-- AWS profile
-- Codex profile
-- SSH config include target
+Phase 1 switches by project code only. Projects may still represent environments such as `dev`, `stg`, `uat`, and `prd`, but environment-level switching is intentionally left for a later phase.
 
-Projects may have environments such as `dev`, `stg`, `uat`, and `prd`, but Phase 1 switches only by project code.
+## Features
+
+- Fast project picker in the terminal.
+- Exports `AWS_PROFILE`, `CODEX_PROFILE`, and `OPSCTX_PROJECT`.
+- Updates an SSH include symlink for the selected project.
+- Stores the last selected project in local state.
+- Ships as an npm package with native Go binaries for Linux and macOS.
 
 ## Install
 
-```bash
+```sh
 npm install -g @ninj4dkill4/octx
 ```
 
-Add the shell wrappers to `~/.zshrc`:
+Verify the install:
+
+```sh
+octx --help
+```
+
+## Shell Integration
+
+`octx` needs a shell wrapper because a child process cannot export environment variables into its parent shell.
+
+Add this to `~/.zshrc`:
 
 ```zsh
 octx() {
@@ -26,61 +42,41 @@ octx() {
     command octx "$@"
   fi
 }
+```
 
+If you use Codex profiles, add this wrapper too:
+
+```zsh
 codex() {
   if [[ -n "${CODEX_PROFILE:-}" ]]; then
-    "$HOME/.local/bin/codex" --profile "$CODEX_PROFILE" "$@"
+    command codex --profile "$CODEX_PROFILE" "$@"
   else
-    "$HOME/.local/bin/codex" "$@"
+    command codex "$@"
   fi
 }
 ```
 
-Reload the shell:
+Reload your shell:
 
-```bash
+```sh
 source ~/.zshrc
 ```
 
-The `octx` wrapper is required because a child process cannot export environment variables into the current shell by itself.
+## Quick Start
 
-The `codex` wrapper is required because Codex CLI uses `--profile <name>`; it does not read `CODEX_PROFILE` directly.
+Create a sample config:
 
-## Release
-
-This repo publishes npm packages with npm Trusted Publishing from GitHub Actions.
-
-Required npm trusted publisher settings:
-
-- Repository: `ninj4dkill4/octx`
-- Workflow file: `release-npm.yml`
-- Packages:
-  - `@ninj4dkill4/octx`
-  - `@ninj4dkill4/octx-linux-x64`
-  - `@ninj4dkill4/octx-linux-arm64`
-  - `@ninj4dkill4/octx-darwin-x64`
-  - `@ninj4dkill4/octx-darwin-arm64`
-
-Publish by pushing a semver tag:
-
-```bash
-git tag v0.1.0
-git push origin v0.1.0
-```
-
-## Initialize Config
-
-```bash
+```sh
 octx init
 ```
 
-Default files:
+Edit the generated config:
 
-- Config: `~/.config/opsctx/config.yaml`
-- State: `~/.config/opsctx/state.yaml`
-- Current SSH include: `~/.config/opsctx/ssh-current`
+```text
+~/.config/opsctx/config.yaml
+```
 
-Example config:
+Example:
 
 ```yaml
 projects:
@@ -97,78 +93,89 @@ projects:
     ssh_config: ~/.ssh/config.d/payment
 ```
 
-`codex_profile` maps to a Codex profile file:
-
-```text
-~/.codex/<codex_profile>.config.toml
-```
-
-For example, `codex_profile: core` uses:
-
-```text
-~/.codex/core.config.toml
-```
-
-## SSH Setup
-
 Add this once to `~/.ssh/config`:
 
 ```sshconfig
 Include ~/.config/opsctx/ssh-current
 ```
 
-When switching project, `octx` updates `ssh-current` to point at the configured project SSH config.
+Switch context:
 
-## Usage
-
-Switch project with the TUI:
-
-```bash
+```sh
 octx
 ```
 
-After selection, the shell wrapper exports:
+Check the current project:
 
-```bash
-OPSCTX_PROJECT=core
-AWS_PROFILE=core-devops
-CODEX_PROFILE=core
-```
-
-It also updates:
-
-- State file: `~/.config/opsctx/state.yaml`
-- SSH include target: `~/.config/opsctx/ssh-current`
-
-After that, run Codex normally:
-
-```bash
-codex
-```
-
-The `codex` shell wrapper will call:
-
-```bash
-~/.local/bin/codex --profile "$CODEX_PROFILE"
-```
-
-Show current project:
-
-```bash
+```sh
 octx current
 ```
 
-Available user commands:
+## What Switch Does
 
-```bash
-octx
-octx init
-octx current
+After selecting a project, `octx`:
+
+- exports `OPSCTX_PROJECT`
+- exports `AWS_PROFILE`
+- exports `CODEX_PROFILE`
+- writes `~/.config/opsctx/state.yaml`
+- updates `~/.config/opsctx/ssh-current` to point to the configured project SSH config
+
+`CODEX_PROFILE` is intentionally just an environment variable. The `codex` shell wrapper maps it to:
+
+```sh
+codex --profile "$CODEX_PROFILE"
 ```
 
-## Phase 1 Limits
+## Files
 
-- No environment selection yet.
-- No secrets management.
-- No direct mutation of AWS credentials/config.
-- No kubeconfig, Terraform, Vault, or directory auto-switch yet.
+Default paths:
+
+| Purpose | Path |
+| --- | --- |
+| Config | `~/.config/opsctx/config.yaml` |
+| State | `~/.config/opsctx/state.yaml` |
+| Current SSH include | `~/.config/opsctx/ssh-current` |
+
+The config and state directory name is still `opsctx` for backward compatibility with early local installs.
+
+## Commands
+
+```sh
+octx          # open picker and switch context
+octx init     # write a sample config
+octx current  # print the current project code
+```
+
+## Release
+
+This repository publishes npm packages through GitHub Actions and npm Trusted Publishing.
+
+Packages:
+
+- `@ninj4dkill4/octx`
+- `@ninj4dkill4/octx-linux-x64`
+- `@ninj4dkill4/octx-linux-arm64`
+- `@ninj4dkill4/octx-darwin-x64`
+- `@ninj4dkill4/octx-darwin-arm64`
+
+Publish a new version by pushing a semver tag:
+
+```sh
+git tag v0.1.3
+git push origin v0.1.3
+```
+
+The workflow builds native binaries, prepares package manifests from the tag version, runs dry-run packs, and publishes to npm.
+
+## Roadmap
+
+- Environment-level switching.
+- Kubeconfig support.
+- Terraform workspace or variable support.
+- Vault or secrets manager integration.
+- Directory-aware auto-switching.
+
+## License
+
+MIT

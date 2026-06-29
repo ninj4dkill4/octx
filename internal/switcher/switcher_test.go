@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/vanle3/opsctx/internal/config"
+	"github.com/ninj4dkill4/octx/internal/config"
 )
 
 func TestSwitchWritesStateAndSSHCurrent(t *testing.T) {

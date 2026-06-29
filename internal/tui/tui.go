@@ -8,8 +8,8 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/muesli/termenv"
-	"github.com/vanle3/opsctx/internal/config"
-	"github.com/vanle3/opsctx/internal/switcher"
+	"github.com/ninj4dkill4/octx/internal/config"
+	"github.com/ninj4dkill4/octx/internal/switcher"
 )
 
 type model struct {

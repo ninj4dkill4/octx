@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/vanle3/opsctx/internal/config"
+	"github.com/ninj4dkill4/octx/internal/config"
 )
 
 type Options struct {

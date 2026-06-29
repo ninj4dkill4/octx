@@ -1,4 +1,4 @@
-module github.com/vanle3/opsctx
+module github.com/ninj4dkill4/octx
 
 go 1.25.0
 

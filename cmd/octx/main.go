@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/vanle3/opsctx/internal/cli"
+	"github.com/ninj4dkill4/octx/internal/cli"
 )
 
 func main() {
