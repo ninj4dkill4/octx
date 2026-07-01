@@ -1,7 +1,7 @@
 {
   "name": "@ninj4dkill4/octx",
-  "version": "0.1.6",
-  "description": "Switch devops terminal context by project code.",
+  "version": "0.1.7",
+  "description": "Switch terminal project context across cloud profiles, CLI profiles, and SSH.",
   "license": "MIT",
   "type": "module",
   "bin": {
@@ -9,7 +9,8 @@
   },
   "files": [
     "bin/",
-    "README.md"
+    "README.md",
+    "RULES.md"
   ],
   "scripts": {
     "build:npm": "node scripts/build-npm.mjs",
@@ -17,10 +18,10 @@
     "publish:npm": "node scripts/publish-npm.mjs"
   },
   "optionalDependencies": {
-    "@ninj4dkill4/octx-darwin-arm64": "0.1.6",
-    "@ninj4dkill4/octx-darwin-x64": "0.1.6",
-    "@ninj4dkill4/octx-linux-arm64": "0.1.6",
-    "@ninj4dkill4/octx-linux-x64": "0.1.6"
+    "@ninj4dkill4/octx-darwin-arm64": "0.1.7",
+    "@ninj4dkill4/octx-darwin-x64": "0.1.7",
+    "@ninj4dkill4/octx-linux-arm64": "0.1.7",
+    "@ninj4dkill4/octx-linux-x64": "0.1.7"
   },
   "engines": {
     "node": ">=18"

@@ -159,6 +159,8 @@ octx current  # print the current project code
 
 This repository publishes npm packages through GitHub Actions and npm Trusted Publishing.
 
+Release and documentation rules live in [`RULES.md`](RULES.md). Update it when the release flow changes.
+
 Packages:
 
 - `@ninj4dkill4/octx`
