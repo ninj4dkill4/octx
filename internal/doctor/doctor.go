@@ -127,7 +127,7 @@ func (c *checker) checkState() {
 		return
 	}
 	if _, ok := c.cfg.FindProject(state.CurrentProject); !ok {
-		c.add(Error, "state", fmt.Sprintf("current project %q is not in config", state.CurrentProject))
+		c.add(Warn, "state", fmt.Sprintf("current project %q is not in config", state.CurrentProject))
 	}
 }
 
@@ -138,7 +138,7 @@ func (c *checker) checkSSH() {
 		}
 		path := config.ExpandPath(project.SSHConfig)
 		if _, err := os.Stat(path); err != nil {
-			c.add(Error, "ssh", fmt.Sprintf("project %s ssh_config %s: %v", project.Code, path, err))
+			c.add(Warn, "ssh", fmt.Sprintf("project %s ssh_config %s: %v", project.Code, path, err))
 			continue
 		}
 		c.add(OK, "ssh", fmt.Sprintf("project %s ssh_config exists", project.Code))
@@ -179,7 +179,7 @@ func (c *checker) checkKubeconfig() {
 		}
 		path := config.ExpandPath(project.Kubeconfig)
 		if _, err := os.Stat(path); err != nil {
-			c.add(Error, "kube", fmt.Sprintf("project %s kubeconfig %s: %v", project.Code, path, err))
+			c.add(Warn, "kube", fmt.Sprintf("project %s kubeconfig %s: %v", project.Code, path, err))
 			continue
 		}
 		c.add(OK, "kube", fmt.Sprintf("project %s kubeconfig exists", project.Code))
@@ -238,13 +238,13 @@ func (c *checker) checkAWSProfiles() {
 	}
 	output, err := c.opts.RunCommand("aws", "configure", "list-profiles")
 	if err != nil {
-		c.add(Error, "aws", fmt.Sprintf("could not list AWS profiles: %v", err))
+		c.add(Warn, "aws", fmt.Sprintf("could not list AWS profiles: %v", err))
 		return
 	}
 	available := parseLineProfiles(output)
 	for _, profile := range required {
 		if !available[profile] {
-			c.add(Error, "aws", fmt.Sprintf("profile %q not found", profile))
+			c.add(Warn, "aws", fmt.Sprintf("profile %q not found", profile))
 			continue
 		}
 		c.add(OK, "aws", fmt.Sprintf("profile %q exists", profile))
@@ -264,13 +264,13 @@ func (c *checker) checkAliyunProfiles() {
 	}
 	output, err := c.opts.RunCommand("aliyun", "configure", "list")
 	if err != nil {
-		c.add(Error, "aliyun", fmt.Sprintf("could not list Aliyun profiles: %v", err))
+		c.add(Warn, "aliyun", fmt.Sprintf("could not list Aliyun profiles: %v", err))
 		return
 	}
 	available := parseAliyunProfiles(output)
 	for _, profile := range required {
 		if !available[profile] {
-			c.add(Error, "aliyun", fmt.Sprintf("profile %q not found", profile))
+			c.add(Warn, "aliyun", fmt.Sprintf("profile %q not found", profile))
 			continue
 		}
 		c.add(OK, "aliyun", fmt.Sprintf("profile %q exists", profile))
@@ -291,7 +291,7 @@ func (c *checker) checkCodexProfiles() {
 	for _, profile := range required {
 		path := filepath.Join(base, profile+".config.toml")
 		if _, err := os.Stat(path); err != nil {
-			c.add(Error, "codex", fmt.Sprintf("profile %q file not found at %s", profile, path))
+			c.add(Warn, "codex", fmt.Sprintf("profile %q file not found at %s", profile, path))
 			continue
 		}
 		c.add(OK, "codex", fmt.Sprintf("profile %q exists", profile))

@@ -22,6 +22,8 @@ Do not leave provider lists stale. Current switched context types are:
 - Kubeconfig via `KUBECONFIG`.
 - SSH include target via `~/.config/opsctx/ssh-current`.
 
+All switched context integrations are optional. Doctor may warn about missing optional profiles, CLIs, SSH config files, or kubeconfig files, but it must not treat those as errors or exit non-zero for them.
+
 Prefer neutral project wording in summaries and repository metadata, such as:
 
 ```text

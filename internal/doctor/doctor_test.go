@@ -47,7 +47,7 @@ func TestRunSkipsDependentChecksWhenConfigMissing(t *testing.T) {
 	}
 }
 
-func TestRunErrorsOnMissingSSHConfig(t *testing.T) {
+func TestRunWarnsOnMissingSSHConfig(t *testing.T) {
 	dir := t.TempDir()
 	configFile := writeConfig(t, dir, `
 projects:
@@ -60,7 +60,10 @@ projects:
 		Env:   testEnv(dir),
 	})
 
-	assertLevel(t, report, Error, "ssh")
+	assertLevel(t, report, Warn, "ssh")
+	if report.HasErrors() {
+		t.Fatalf("doctor should not fail on missing optional ssh_config: %#v", report.Results)
+	}
 }
 
 func TestRunValidatesKubeconfig(t *testing.T) {
@@ -83,7 +86,7 @@ projects:
 	assertContains(t, report, OK, "kube", "project core kubeconfig exists")
 }
 
-func TestRunErrorsOnMissingKubeconfig(t *testing.T) {
+func TestRunWarnsOnMissingKubeconfig(t *testing.T) {
 	dir := t.TempDir()
 	configFile := writeConfig(t, dir, `
 projects:
@@ -96,10 +99,13 @@ projects:
 		Env:   testEnv(dir),
 	})
 
-	assertLevel(t, report, Error, "kube")
+	assertLevel(t, report, Warn, "kube")
+	if report.HasErrors() {
+		t.Fatalf("doctor should not fail on missing optional kubeconfig: %#v", report.Results)
+	}
 }
 
-func TestRunErrorsWhenStateProjectMissingFromConfig(t *testing.T) {
+func TestRunWarnsWhenStateProjectMissingFromConfig(t *testing.T) {
 	dir := t.TempDir()
 	configFile := writeConfig(t, dir, `
 projects:
@@ -114,7 +120,10 @@ projects:
 		Env:   testEnv(dir),
 	})
 
-	assertContains(t, report, Error, "state", `current project "missing" is not in config`)
+	assertContains(t, report, Warn, "state", `current project "missing" is not in config`)
+	if report.HasErrors() {
+		t.Fatalf("doctor should not fail when saved state points to an optional stale project: %#v", report.Results)
+	}
 }
 
 func TestRunWarnsOnEnvMismatch(t *testing.T) {
@@ -188,7 +197,7 @@ projects:
 	}
 }
 
-func TestRunErrorsOnMissingExternalProfiles(t *testing.T) {
+func TestRunWarnsOnMissingExternalProfiles(t *testing.T) {
 	dir := t.TempDir()
 	configFile := writeConfig(t, dir, `
 projects:
@@ -209,9 +218,12 @@ projects:
 		},
 	})
 
-	assertContains(t, report, Error, "aws", `profile "core-devops" not found`)
-	assertContains(t, report, Error, "aliyun", `profile "core-aliyun" not found`)
-	assertContains(t, report, Error, "codex", `profile "core" file not found`)
+	assertContains(t, report, Warn, "aws", `profile "core-devops" not found`)
+	assertContains(t, report, Warn, "aliyun", `profile "core-aliyun" not found`)
+	assertContains(t, report, Warn, "codex", `profile "core" file not found`)
+	if report.HasErrors() {
+		t.Fatalf("doctor should not fail on missing optional external profiles: %#v", report.Results)
+	}
 }
 
 func TestParseAliyunProfiles(t *testing.T) {

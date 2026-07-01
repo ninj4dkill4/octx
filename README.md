@@ -170,7 +170,9 @@ octx version  # print octx version
 
 ## Doctor
 
-`octx doctor` checks the local setup without changing files or calling cloud APIs. It validates config/state, configured SSH and kubeconfig files, current shell environment, available AWS/Aliyun/Codex profiles, and the `octx` binary resolved from `PATH`.
+`octx doctor` checks the local setup without changing files or calling cloud APIs. It validates the core config/state, reports optional SSH, kubeconfig, AWS, Aliyun, and Codex setup as warnings, checks the current shell environment, and checks the `octx` binary resolved from `PATH`.
+
+Optional integrations are never required for a project. `doctor` exits non-zero only for core config/state errors, not because a machine does not have a configured cloud profile or local file.
 
 ## Release
 
