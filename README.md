@@ -116,6 +116,12 @@ Check the current project:
 octx current
 ```
 
+Diagnose the local setup:
+
+```sh
+octx doctor
+```
+
 ## What Switch Does
 
 After selecting a project, `octx`:
@@ -153,7 +159,12 @@ The config and state directory name is still `opsctx` for backward compatibility
 octx          # open picker and switch context
 octx init     # write a sample config
 octx current  # print the current project code
+octx doctor   # diagnose config, profiles, shell env, SSH, and install path
 ```
+
+## Doctor
+
+`octx doctor` checks the local setup without changing files or calling cloud APIs. It validates config/state, configured SSH files, current shell environment, available AWS/Aliyun/Codex profiles, and the `octx` binary resolved from `PATH`.
 
 ## Release
 

@@ -1,6 +1,6 @@
 {
   "name": "@ninj4dkill4/octx",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "description": "Switch terminal project context across cloud profiles, CLI profiles, and SSH.",
   "license": "MIT",
   "type": "module",
@@ -18,10 +18,10 @@
     "publish:npm": "node scripts/publish-npm.mjs"
   },
   "optionalDependencies": {
-    "@ninj4dkill4/octx-darwin-arm64": "0.1.7",
-    "@ninj4dkill4/octx-darwin-x64": "0.1.7",
-    "@ninj4dkill4/octx-linux-arm64": "0.1.7",
-    "@ninj4dkill4/octx-linux-x64": "0.1.7"
+    "@ninj4dkill4/octx-darwin-arm64": "0.1.8",
+    "@ninj4dkill4/octx-darwin-x64": "0.1.8",
+    "@ninj4dkill4/octx-linux-arm64": "0.1.8",
+    "@ninj4dkill4/octx-linux-x64": "0.1.8"
   },
   "engines": {
     "node": ">=18"

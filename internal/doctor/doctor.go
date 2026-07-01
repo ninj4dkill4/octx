@@ -1,0 +1,438 @@
+package doctor
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
+	"time"
+
+	"github.com/ninj4dkill4/octx/internal/config"
+)
+
+type Level string
+
+const (
+	OK    Level = "OK"
+	Warn  Level = "WARN"
+	Error Level = "ERROR"
+)
+
+type Result struct {
+	Level   Level
+	Check   string
+	Message string
+}
+
+type Report struct {
+	Results []Result
+}
+
+func (r Report) ErrorCount() int {
+	count := 0
+	for _, result := range r.Results {
+		if result.Level == Error {
+			count++
+		}
+	}
+	return count
+}
+
+func (r Report) HasErrors() bool {
+	return r.ErrorCount() > 0
+}
+
+type Options struct {
+	Paths      config.Paths
+	Env        map[string]string
+	LookPath   func(string) (string, error)
+	RunCommand func(string, ...string) (string, error)
+	Executable func() (string, error)
+}
+
+func Run(opts Options) Report {
+	opts = withDefaults(opts)
+	checker := checker{opts: opts}
+	checker.run()
+	return Report{Results: checker.results}
+}
+
+type checker struct {
+	opts    Options
+	cfg     config.Config
+	state   config.State
+	results []Result
+}
+
+func (c *checker) run() {
+	c.checkConfig()
+	c.checkState()
+	c.checkSSH()
+	c.checkEnv()
+	c.checkExternalProfiles()
+	c.checkExecutable()
+}
+
+func (c *checker) add(level Level, check, message string) {
+	c.results = append(c.results, Result{
+		Level:   level,
+		Check:   check,
+		Message: message,
+	})
+}
+
+func (c *checker) checkConfig() {
+	cfg, err := config.LoadConfig(c.opts.Paths.ConfigFile)
+	if err != nil {
+		if errors.Is(err, config.ErrNotFound) {
+			c.add(Error, "config", fmt.Sprintf("config not found at %s; run `octx init` first", c.opts.Paths.ConfigFile))
+			return
+		}
+		c.add(Error, "config", fmt.Sprintf("config invalid at %s: %v", c.opts.Paths.ConfigFile, err))
+		return
+	}
+
+	c.cfg = cfg
+	c.add(OK, "config", fmt.Sprintf("loaded %s", c.opts.Paths.ConfigFile))
+	if len(cfg.Projects) == 0 {
+		c.add(Warn, "config", "no projects configured")
+	}
+}
+
+func (c *checker) checkState() {
+	state, err := config.LoadState(c.opts.Paths.StateFile)
+	if err != nil {
+		if errors.Is(err, config.ErrNotFound) {
+			c.add(Warn, "state", fmt.Sprintf("state not found at %s; switch a project first", c.opts.Paths.StateFile))
+			return
+		}
+		c.add(Error, "state", fmt.Sprintf("state invalid at %s: %v", c.opts.Paths.StateFile, err))
+		return
+	}
+
+	c.state = state
+	c.add(OK, "state", fmt.Sprintf("current project is %s", state.CurrentProject))
+	if state.CurrentProject == "" {
+		c.add(Warn, "state", "current project is empty")
+		return
+	}
+	if _, ok := c.cfg.FindProject(state.CurrentProject); !ok {
+		c.add(Error, "state", fmt.Sprintf("current project %q is not in config", state.CurrentProject))
+	}
+}
+
+func (c *checker) checkSSH() {
+	for _, project := range c.cfg.Projects {
+		if project.SSHConfig == "" {
+			continue
+		}
+		path := config.ExpandPath(project.SSHConfig)
+		if _, err := os.Stat(path); err != nil {
+			c.add(Error, "ssh", fmt.Sprintf("project %s ssh_config %s: %v", project.Code, path, err))
+			continue
+		}
+		c.add(OK, "ssh", fmt.Sprintf("project %s ssh_config exists", project.Code))
+	}
+
+	if c.state.CurrentProject == "" {
+		return
+	}
+	project, ok := c.cfg.FindProject(c.state.CurrentProject)
+	if !ok {
+		return
+	}
+	currentPath := config.ExpandPath(c.opts.Paths.SSHCurrent)
+	if project.SSHConfig == "" {
+		if _, err := os.Lstat(currentPath); err == nil {
+			c.add(Warn, "ssh", fmt.Sprintf("ssh-current exists but current project %s has no ssh_config", project.Code))
+		}
+		return
+	}
+
+	target, err := os.Readlink(currentPath)
+	if err != nil {
+		c.add(Warn, "ssh", fmt.Sprintf("ssh-current is not readable at %s: %v", currentPath, err))
+		return
+	}
+	expected := config.ExpandPath(project.SSHConfig)
+	if target != expected {
+		c.add(Warn, "ssh", fmt.Sprintf("ssh-current points to %s, want %s", target, expected))
+		return
+	}
+	c.add(OK, "ssh", fmt.Sprintf("ssh-current points to current project %s", project.Code))
+}
+
+func (c *checker) checkEnv() {
+	if c.state.CurrentProject == "" {
+		return
+	}
+	project, ok := c.cfg.FindProject(c.state.CurrentProject)
+	if !ok {
+		return
+	}
+
+	c.checkEnvValue("OPSCTX_PROJECT", project.Code)
+	c.checkEnvValue("AWS_PROFILE", project.AWSProfile)
+	c.checkEnvValue("ALIBABA_CLOUD_PROFILE", project.AliyunProfile)
+	c.checkEnvValue("CODEX_PROFILE", project.CodexProfile)
+}
+
+func (c *checker) checkEnvValue(key, want string) {
+	got, ok := c.opts.Env[key]
+	if want == "" {
+		if ok && got != "" {
+			c.add(Warn, "env", fmt.Sprintf("%s=%q, want unset", key, got))
+			return
+		}
+		c.add(OK, "env", fmt.Sprintf("%s is unset", key))
+		return
+	}
+	if !ok || got != want {
+		c.add(Warn, "env", fmt.Sprintf("%s=%q, want %q", key, got, want))
+		return
+	}
+	c.add(OK, "env", fmt.Sprintf("%s matches", key))
+}
+
+func (c *checker) checkExternalProfiles() {
+	c.checkAWSProfiles()
+	c.checkAliyunProfiles()
+	c.checkCodexProfiles()
+}
+
+func (c *checker) checkAWSProfiles() {
+	required := uniqueProfiles(c.cfg.Projects, func(project config.Project) string {
+		return project.AWSProfile
+	})
+	if len(required) == 0 {
+		return
+	}
+	if _, err := c.opts.LookPath("aws"); err != nil {
+		c.add(Warn, "aws", "aws CLI not found; skipping AWS profile validation")
+		return
+	}
+	output, err := c.opts.RunCommand("aws", "configure", "list-profiles")
+	if err != nil {
+		c.add(Error, "aws", fmt.Sprintf("could not list AWS profiles: %v", err))
+		return
+	}
+	available := parseLineProfiles(output)
+	for _, profile := range required {
+		if !available[profile] {
+			c.add(Error, "aws", fmt.Sprintf("profile %q not found", profile))
+			continue
+		}
+		c.add(OK, "aws", fmt.Sprintf("profile %q exists", profile))
+	}
+}
+
+func (c *checker) checkAliyunProfiles() {
+	required := uniqueProfiles(c.cfg.Projects, func(project config.Project) string {
+		return project.AliyunProfile
+	})
+	if len(required) == 0 {
+		return
+	}
+	if _, err := c.opts.LookPath("aliyun"); err != nil {
+		c.add(Warn, "aliyun", "aliyun CLI not found; skipping Aliyun profile validation")
+		return
+	}
+	output, err := c.opts.RunCommand("aliyun", "configure", "list")
+	if err != nil {
+		c.add(Error, "aliyun", fmt.Sprintf("could not list Aliyun profiles: %v", err))
+		return
+	}
+	available := parseAliyunProfiles(output)
+	for _, profile := range required {
+		if !available[profile] {
+			c.add(Error, "aliyun", fmt.Sprintf("profile %q not found", profile))
+			continue
+		}
+		c.add(OK, "aliyun", fmt.Sprintf("profile %q exists", profile))
+	}
+}
+
+func (c *checker) checkCodexProfiles() {
+	required := uniqueProfiles(c.cfg.Projects, func(project config.Project) string {
+		return project.CodexProfile
+	})
+	if len(required) == 0 {
+		return
+	}
+	base := c.opts.Env["CODEX_HOME"]
+	if base == "" {
+		base = filepath.Join(c.opts.Env["HOME"], ".codex")
+	}
+	for _, profile := range required {
+		path := filepath.Join(base, profile+".config.toml")
+		if _, err := os.Stat(path); err != nil {
+			c.add(Error, "codex", fmt.Sprintf("profile %q file not found at %s", profile, path))
+			continue
+		}
+		c.add(OK, "codex", fmt.Sprintf("profile %q exists", profile))
+	}
+}
+
+func (c *checker) checkExecutable() {
+	executable, err := c.opts.Executable()
+	if err != nil {
+		c.add(Warn, "binary", fmt.Sprintf("could not determine current executable: %v", err))
+		return
+	}
+	c.add(OK, "binary", fmt.Sprintf("running %s", executable))
+
+	resolved, err := findInPath("octx", c.opts.Env["PATH"])
+	if err != nil {
+		c.add(Warn, "binary", "octx not found in PATH")
+		return
+	}
+	if !samePath(resolved, executable) {
+		if isNPMWrapperForBinary(resolved, executable) {
+			c.add(OK, "binary", "PATH resolves to npm launcher for the running octx binary")
+			return
+		}
+		c.add(Warn, "binary", fmt.Sprintf("PATH resolves octx to %s, running %s", resolved, executable))
+		return
+	}
+	c.add(OK, "binary", "PATH resolves to the running octx binary")
+}
+
+func withDefaults(opts Options) Options {
+	if opts.Env == nil {
+		opts.Env = envMap()
+	}
+	if opts.LookPath == nil {
+		opts.LookPath = exec.LookPath
+	}
+	if opts.RunCommand == nil {
+		opts.RunCommand = runCommand
+	}
+	if opts.Executable == nil {
+		opts.Executable = os.Executable
+	}
+	return opts
+}
+
+func envMap() map[string]string {
+	env := make(map[string]string)
+	for _, item := range os.Environ() {
+		key, value, ok := strings.Cut(item, "=")
+		if ok {
+			env[key] = value
+		}
+	}
+	return env
+}
+
+func runCommand(name string, args ...string) (string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, name, args...)
+	output, err := cmd.CombinedOutput()
+	if ctx.Err() == context.DeadlineExceeded {
+		return string(output), fmt.Errorf("%s timed out", name)
+	}
+	if err != nil {
+		return string(output), fmt.Errorf("%w: %s", err, strings.TrimSpace(string(output)))
+	}
+	return string(output), nil
+}
+
+func uniqueProfiles(projects []config.Project, profile func(config.Project) string) []string {
+	seen := make(map[string]struct{})
+	var result []string
+	for _, project := range projects {
+		value := profile(project)
+		if value == "" {
+			continue
+		}
+		if _, ok := seen[value]; ok {
+			continue
+		}
+		seen[value] = struct{}{}
+		result = append(result, value)
+	}
+	return result
+}
+
+func parseLineProfiles(output string) map[string]bool {
+	profiles := make(map[string]bool)
+	for _, line := range strings.Split(output, "\n") {
+		line = strings.TrimSpace(line)
+		if line != "" {
+			profiles[line] = true
+		}
+	}
+	return profiles
+}
+
+func parseAliyunProfiles(output string) map[string]bool {
+	profiles := make(map[string]bool)
+	for _, line := range strings.Split(output, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "-") || strings.Contains(line, "Credential") {
+			continue
+		}
+		fields := strings.Fields(line)
+		if len(fields) == 0 {
+			continue
+		}
+		name := strings.TrimSuffix(fields[0], " *")
+		name = strings.TrimSuffix(name, "*")
+		if name != "" {
+			profiles[name] = true
+		}
+	}
+	return profiles
+}
+
+func findInPath(name, pathValue string) (string, error) {
+	for _, dir := range filepath.SplitList(pathValue) {
+		if dir == "" {
+			continue
+		}
+		candidate := filepath.Join(dir, name)
+		info, err := os.Stat(candidate)
+		if err != nil || info.IsDir() || info.Mode()&0o111 == 0 {
+			continue
+		}
+		return candidate, nil
+	}
+	return "", os.ErrNotExist
+}
+
+func samePath(a, b string) bool {
+	aEval, aErr := filepath.EvalSymlinks(a)
+	bEval, bErr := filepath.EvalSymlinks(b)
+	if aErr == nil {
+		a = aEval
+	}
+	if bErr == nil {
+		b = bEval
+	}
+	aAbs, aErr := filepath.Abs(a)
+	bAbs, bErr := filepath.Abs(b)
+	if aErr == nil {
+		a = aAbs
+	}
+	if bErr == nil {
+		b = bAbs
+	}
+	return a == b
+}
+
+func isNPMWrapperForBinary(wrapperPath, binaryPath string) bool {
+	wrapperEval, err := filepath.EvalSymlinks(wrapperPath)
+	if err == nil {
+		wrapperPath = wrapperEval
+	}
+	wrapperPath = filepath.ToSlash(wrapperPath)
+	binaryPath = filepath.ToSlash(binaryPath)
+	return strings.HasSuffix(wrapperPath, "/@ninj4dkill4/octx/bin/octx.js") &&
+		strings.Contains(binaryPath, "/@ninj4dkill4/octx/node_modules/@ninj4dkill4/octx-") &&
+		strings.HasSuffix(binaryPath, "/bin/octx")
+}

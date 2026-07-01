@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"github.com/ninj4dkill4/octx/internal/config"
+	"github.com/ninj4dkill4/octx/internal/doctor"
 	"github.com/ninj4dkill4/octx/internal/switcher"
 	opsTUI "github.com/ninj4dkill4/octx/internal/tui"
 	"github.com/spf13/cobra"
@@ -22,9 +23,10 @@ func NewRootCommand() *cobra.Command {
 	opts := &rootOptions{}
 
 	cmd := &cobra.Command{
-		Use:   "octx",
-		Short: "Switch devops project context",
-		Long:  "octx switches terminal context by project code for AWS, Aliyun, Codex, and SSH.",
+		Use:           "octx",
+		Short:         "Switch devops project context",
+		Long:          "octx switches terminal context by project code for AWS, Aliyun, Codex, and SSH.",
+		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runRoot(cmd, opts)
 		},
@@ -39,6 +41,7 @@ func NewRootCommand() *cobra.Command {
 	cmd.AddCommand(
 		newInitCommand(opts),
 		newCurrentCommand(opts),
+		newDoctorCommand(opts),
 	)
 
 	return cmd
@@ -60,6 +63,28 @@ func newInitCommand(opts *rootOptions) *cobra.Command {
 				return err
 			}
 			fmt.Fprintf(cmd.OutOrStdout(), "Wrote %s\n", paths.ConfigFile)
+			return nil
+		},
+	}
+}
+
+func newDoctorCommand(opts *rootOptions) *cobra.Command {
+	return &cobra.Command{
+		Use:          "doctor",
+		Short:        "Diagnose local octx setup",
+		SilenceUsage: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			paths, err := pathsFromOptions(opts)
+			if err != nil {
+				return err
+			}
+			report := doctor.Run(doctor.Options{Paths: paths})
+			for _, result := range report.Results {
+				fmt.Fprintf(cmd.OutOrStdout(), "%-5s %-8s %s\n", result.Level, result.Check, result.Message)
+			}
+			if report.HasErrors() {
+				return fmt.Errorf("doctor found %d error(s)", report.ErrorCount())
+			}
 			return nil
 		},
 	}

@@ -8,6 +8,7 @@ When changing any switched context type, profile field, environment variable, co
 - Sample config in `internal/config/config.go`.
 - Runtime exports in `internal/switcher/switcher.go`.
 - Tests in `internal/switcher/switcher_test.go`.
+- Doctor checks in `internal/doctor` when a switched context type or profile source changes.
 - README feature list, config example, switch behavior, and release instructions.
 - npm metadata in `package.json` and platform package manifests.
 - GitHub Release notes for the published tag.
