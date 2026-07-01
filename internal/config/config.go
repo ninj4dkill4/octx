@@ -19,11 +19,12 @@ type Config struct {
 }
 
 type Project struct {
-	Code         string `yaml:"code"`
-	Name         string `yaml:"name"`
-	AWSProfile   string `yaml:"aws_profile"`
-	CodexProfile string `yaml:"codex_profile"`
-	SSHConfig    string `yaml:"ssh_config"`
+	Code          string `yaml:"code"`
+	Name          string `yaml:"name"`
+	AWSProfile    string `yaml:"aws_profile"`
+	CodexProfile  string `yaml:"codex_profile"`
+	AliyunProfile string `yaml:"aliyun_profile"`
+	SSHConfig     string `yaml:"ssh_config"`
 }
 
 type State struct {
@@ -116,18 +117,20 @@ func WriteSampleConfig(path string) error {
 	cfg := Config{
 		Projects: []Project{
 			{
-				Code:         "core",
-				Name:         "Core Platform",
-				AWSProfile:   "core-devops",
-				CodexProfile: "core",
-				SSHConfig:    "~/.ssh/config.d/core",
+				Code:          "core",
+				Name:          "Core Platform",
+				AWSProfile:    "core-devops",
+				CodexProfile:  "core",
+				AliyunProfile: "core-devops",
+				SSHConfig:     "~/.ssh/config.d/core",
 			},
 			{
-				Code:         "pay",
-				Name:         "Payment",
-				AWSProfile:   "payment-devops",
-				CodexProfile: "payment",
-				SSHConfig:    "~/.ssh/config.d/payment",
+				Code:          "pay",
+				Name:          "Payment",
+				AWSProfile:    "payment-devops",
+				CodexProfile:  "payment",
+				AliyunProfile: "payment-devops",
+				SSHConfig:     "~/.ssh/config.d/payment",
 			},
 		},
 	}

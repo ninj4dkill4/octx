@@ -4,7 +4,7 @@
 [![npm version](https://img.shields.io/npm/v/%40ninj4dkill4%2Foctx.svg)](https://www.npmjs.com/package/@ninj4dkill4/octx)
 [![license](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-`octx` is a small terminal context switcher for DevOps work. Pick a project once, then keep AWS, Codex, and SSH aligned in the current shell.
+`octx` is a small terminal context switcher for DevOps work. Pick a project once, then keep AWS, Aliyun, Codex, and SSH aligned in the current shell.
 
 Phase 1 switches by project code only. Projects may still represent environments such as `dev`, `stg`, `uat`, and `prd`, but environment-level switching is intentionally left for a later phase.
 
@@ -12,7 +12,7 @@ Phase 1 switches by project code only. Projects may still represent environments
 
 - Fast project picker in the terminal.
 - Exports `OPSCTX_PROJECT`.
-- Exports or unsets `AWS_PROFILE` and `CODEX_PROFILE`.
+- Exports or unsets `AWS_PROFILE`, `ALIBABA_CLOUD_PROFILE`, and `CODEX_PROFILE`.
 - Updates or clears an SSH include symlink for the selected project.
 - Stores the last selected project in local state.
 - Ships as an npm package with native Go binaries for Linux and macOS.
@@ -84,17 +84,19 @@ projects:
   - code: core
     name: Core Platform
     aws_profile: core-devops
+    aliyun_profile: core-devops
     codex_profile: core
     ssh_config: ~/.ssh/config.d/core
 
   - code: pay
     name: Payment
     aws_profile: payment-devops
+    aliyun_profile: payment-devops
     codex_profile: payment
     ssh_config: ~/.ssh/config.d/payment
 ```
 
-Only `code` is required. `aws_profile`, `codex_profile`, and `ssh_config` are optional. If an optional profile is omitted, `octx` unsets the matching environment variable during switch. If `ssh_config` is omitted, `octx` removes the generated SSH include target.
+Only `code` is required. `aws_profile`, `aliyun_profile`, `codex_profile`, and `ssh_config` are optional. If an optional profile is omitted, `octx` unsets the matching environment variable during switch. If `ssh_config` is omitted, `octx` removes the generated SSH include target.
 
 Add this once to `~/.ssh/config`:
 
@@ -120,6 +122,7 @@ After selecting a project, `octx`:
 
 - exports `OPSCTX_PROJECT`
 - exports or unsets `AWS_PROFILE`
+- exports or unsets `ALIBABA_CLOUD_PROFILE`
 - exports or unsets `CODEX_PROFILE`
 - writes `~/.config/opsctx/state.yaml`
 - updates `~/.config/opsctx/ssh-current` to point to the configured project SSH config, or removes it when no `ssh_config` is configured
@@ -129,6 +132,8 @@ After selecting a project, `octx`:
 ```sh
 codex --profile "$CODEX_PROFILE"
 ```
+
+`aliyun_profile` maps to `ALIBABA_CLOUD_PROFILE`, which Alibaba Cloud CLI uses as the active profile for the current terminal session.
 
 ## Files
 

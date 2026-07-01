@@ -62,6 +62,7 @@ func ShellExports(project config.Project) string {
 	writeExport(&b, "OPSCTX_PROJECT", project.Code)
 	writeExport(&b, "AWS_PROFILE", project.AWSProfile)
 	writeExport(&b, "CODEX_PROFILE", project.CodexProfile)
+	writeExport(&b, "ALIBABA_CLOUD_PROFILE", project.AliyunProfile)
 	return b.String()
 }
 
