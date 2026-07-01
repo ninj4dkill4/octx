@@ -11,6 +11,7 @@ When changing any switched context type, profile field, environment variable, co
 - Doctor checks in `internal/doctor` when a switched context type or profile source changes.
 - README feature list, config example, switch behavior, and release instructions.
 - npm metadata in `package.json` and platform package manifests.
+- Version output and build-time version injection when release behavior changes.
 - GitHub Release notes for the published tag.
 
 Do not leave provider lists stale. Current switched context types are:

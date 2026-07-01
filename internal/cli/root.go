@@ -9,6 +9,7 @@ import (
 	"github.com/ninj4dkill4/octx/internal/doctor"
 	"github.com/ninj4dkill4/octx/internal/switcher"
 	opsTUI "github.com/ninj4dkill4/octx/internal/tui"
+	"github.com/ninj4dkill4/octx/internal/version"
 	"github.com/spf13/cobra"
 )
 
@@ -42,6 +43,7 @@ func NewRootCommand() *cobra.Command {
 		newInitCommand(opts),
 		newCurrentCommand(opts),
 		newDoctorCommand(opts),
+		newVersionCommand(),
 	)
 
 	return cmd
@@ -86,6 +88,16 @@ func newDoctorCommand(opts *rootOptions) *cobra.Command {
 				return fmt.Errorf("doctor found %d error(s)", report.ErrorCount())
 			}
 			return nil
+		},
+	}
+}
+
+func newVersionCommand() *cobra.Command {
+	return &cobra.Command{
+		Use:   "version",
+		Short: "Print octx version",
+		Run: func(cmd *cobra.Command, args []string) {
+			fmt.Fprintln(cmd.OutOrStdout(), version.Version)
 		},
 	}
 }

@@ -160,6 +160,7 @@ octx          # open picker and switch context
 octx init     # write a sample config
 octx current  # print the current project code
 octx doctor   # diagnose config, profiles, shell env, SSH, and install path
+octx version  # print octx version
 ```
 
 ## Doctor
