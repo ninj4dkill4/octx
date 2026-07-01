@@ -63,12 +63,17 @@ func Run(opts Options) Report {
 type checker struct {
 	opts    Options
 	cfg     config.Config
+	cfgOK   bool
 	state   config.State
 	results []Result
 }
 
 func (c *checker) run() {
 	c.checkConfig()
+	if !c.cfgOK {
+		c.checkExecutable()
+		return
+	}
 	c.checkState()
 	c.checkSSH()
 	c.checkEnv()
@@ -96,6 +101,7 @@ func (c *checker) checkConfig() {
 	}
 
 	c.cfg = cfg
+	c.cfgOK = true
 	c.add(OK, "config", fmt.Sprintf("loaded %s", c.opts.Paths.ConfigFile))
 	if len(cfg.Projects) == 0 {
 		c.add(Warn, "config", "no projects configured")

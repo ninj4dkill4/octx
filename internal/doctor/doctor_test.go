@@ -28,6 +28,25 @@ projects:
 	}
 }
 
+func TestRunSkipsDependentChecksWhenConfigMissing(t *testing.T) {
+	dir := t.TempDir()
+	if err := config.SaveState(filepath.Join(dir, "state.yaml"), config.State{CurrentProject: "old"}); err != nil {
+		t.Fatal(err)
+	}
+
+	report := Run(Options{
+		Paths: testPaths(dir, filepath.Join(dir, "missing-config.yaml")),
+		Env:   testEnv(dir),
+	})
+
+	assertContains(t, report, Error, "config", "config not found")
+	for _, result := range report.Results {
+		if result.Check == "state" || result.Check == "ssh" || result.Check == "env" {
+			t.Fatalf("dependent check %s should be skipped when config is missing: %#v", result.Check, report.Results)
+		}
+	}
+}
+
 func TestRunErrorsOnMissingSSHConfig(t *testing.T) {
 	dir := t.TempDir()
 	configFile := writeConfig(t, dir, `
