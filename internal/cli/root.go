@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/spf13/cobra"
 	"github.com/ninj4dkill4/octx/internal/config"
 	"github.com/ninj4dkill4/octx/internal/switcher"
 	opsTUI "github.com/ninj4dkill4/octx/internal/tui"
+	"github.com/spf13/cobra"
 )
 
 type rootOptions struct {
@@ -24,7 +24,7 @@ func NewRootCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "octx",
 		Short: "Switch devops project context",
-		Long:  "octx switches terminal context by project code for AWS, Codex, and SSH.",
+		Long:  "octx switches terminal context by project code for AWS, Aliyun, Codex, and SSH.",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runRoot(cmd, opts)
 		},
