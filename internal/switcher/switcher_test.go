@@ -24,6 +24,7 @@ projects:
     aws_profile: core-devops
     codex_profile: core
     aliyun_profile: core-devops
+    kubeconfig: ~/.kube/core
     ssh_config: `+sshConfig+`
 `), 0o600); err != nil {
 		t.Fatal(err)
@@ -61,12 +62,16 @@ func TestShellExports(t *testing.T) {
 		AWSProfile:    "core-devops",
 		CodexProfile:  "core",
 		AliyunProfile: "core-aliyun",
+		Kubeconfig:    "~/.kube/core",
 	})
 	if !strings.Contains(output, "export AWS_PROFILE='core-devops'") {
 		t.Fatalf("missing AWS_PROFILE export: %s", output)
 	}
 	if !strings.Contains(output, "export ALIBABA_CLOUD_PROFILE='core-aliyun'") {
 		t.Fatalf("missing ALIBABA_CLOUD_PROFILE export: %s", output)
+	}
+	if !strings.Contains(output, "export KUBECONFIG='~/.kube/core'") {
+		t.Fatalf("missing KUBECONFIG export: %s", output)
 	}
 }
 
@@ -114,6 +119,7 @@ func TestShellExportsUnsetOptionalProfiles(t *testing.T) {
 		"unset AWS_PROFILE",
 		"unset CODEX_PROFILE",
 		"unset ALIBABA_CLOUD_PROFILE",
+		"unset KUBECONFIG",
 	} {
 		if !strings.Contains(output, want) {
 			t.Fatalf("missing %q in shell exports: %s", want, output)

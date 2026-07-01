@@ -24,6 +24,7 @@ type Project struct {
 	AWSProfile    string `yaml:"aws_profile"`
 	CodexProfile  string `yaml:"codex_profile"`
 	AliyunProfile string `yaml:"aliyun_profile"`
+	Kubeconfig    string `yaml:"kubeconfig"`
 	SSHConfig     string `yaml:"ssh_config"`
 }
 
@@ -122,6 +123,7 @@ func WriteSampleConfig(path string) error {
 				AWSProfile:    "core-devops",
 				CodexProfile:  "core",
 				AliyunProfile: "core-devops",
+				Kubeconfig:    "~/.kube/core",
 				SSHConfig:     "~/.ssh/config.d/core",
 			},
 			{
@@ -130,6 +132,7 @@ func WriteSampleConfig(path string) error {
 				AWSProfile:    "payment-devops",
 				CodexProfile:  "payment",
 				AliyunProfile: "payment-devops",
+				Kubeconfig:    "~/.kube/payment",
 				SSHConfig:     "~/.ssh/config.d/payment",
 			},
 		},

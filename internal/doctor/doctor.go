@@ -76,6 +76,7 @@ func (c *checker) run() {
 	}
 	c.checkState()
 	c.checkSSH()
+	c.checkKubeconfig()
 	c.checkEnv()
 	c.checkExternalProfiles()
 	c.checkExecutable()
@@ -171,6 +172,20 @@ func (c *checker) checkSSH() {
 	c.add(OK, "ssh", fmt.Sprintf("ssh-current points to current project %s", project.Code))
 }
 
+func (c *checker) checkKubeconfig() {
+	for _, project := range c.cfg.Projects {
+		if project.Kubeconfig == "" {
+			continue
+		}
+		path := config.ExpandPath(project.Kubeconfig)
+		if _, err := os.Stat(path); err != nil {
+			c.add(Error, "kube", fmt.Sprintf("project %s kubeconfig %s: %v", project.Code, path, err))
+			continue
+		}
+		c.add(OK, "kube", fmt.Sprintf("project %s kubeconfig exists", project.Code))
+	}
+}
+
 func (c *checker) checkEnv() {
 	if c.state.CurrentProject == "" {
 		return
@@ -184,6 +199,7 @@ func (c *checker) checkEnv() {
 	c.checkEnvValue("AWS_PROFILE", project.AWSProfile)
 	c.checkEnvValue("ALIBABA_CLOUD_PROFILE", project.AliyunProfile)
 	c.checkEnvValue("CODEX_PROFILE", project.CodexProfile)
+	c.checkEnvValue("KUBECONFIG", project.Kubeconfig)
 }
 
 func (c *checker) checkEnvValue(key, want string) {

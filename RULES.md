@@ -19,6 +19,7 @@ Do not leave provider lists stale. Current switched context types are:
 - AWS profile via `AWS_PROFILE`.
 - Aliyun profile via `ALIBABA_CLOUD_PROFILE`.
 - Codex profile via `CODEX_PROFILE`.
+- Kubeconfig via `KUBECONFIG`.
 - SSH include target via `~/.config/opsctx/ssh-current`.
 
 Prefer neutral project wording in summaries and repository metadata, such as:

@@ -12,7 +12,7 @@ Phase 1 switches by project code only. Projects may still represent environments
 
 - Fast project picker in the terminal.
 - Exports `OPSCTX_PROJECT`.
-- Exports or unsets `AWS_PROFILE`, `ALIBABA_CLOUD_PROFILE`, and `CODEX_PROFILE`.
+- Exports or unsets `AWS_PROFILE`, `ALIBABA_CLOUD_PROFILE`, `CODEX_PROFILE`, and `KUBECONFIG`.
 - Updates or clears an SSH include symlink for the selected project.
 - Stores the last selected project in local state.
 - Ships as an npm package with native Go binaries for Linux and macOS.
@@ -86,6 +86,7 @@ projects:
     aws_profile: core-devops
     aliyun_profile: core-devops
     codex_profile: core
+    kubeconfig: ~/.kube/core
     ssh_config: ~/.ssh/config.d/core
 
   - code: pay
@@ -93,10 +94,11 @@ projects:
     aws_profile: payment-devops
     aliyun_profile: payment-devops
     codex_profile: payment
+    kubeconfig: ~/.kube/payment
     ssh_config: ~/.ssh/config.d/payment
 ```
 
-Only `code` is required. `aws_profile`, `aliyun_profile`, `codex_profile`, and `ssh_config` are optional. If an optional profile is omitted, `octx` unsets the matching environment variable during switch. If `ssh_config` is omitted, `octx` removes the generated SSH include target.
+Only `code` is required. `aws_profile`, `aliyun_profile`, `codex_profile`, `kubeconfig`, and `ssh_config` are optional. If an optional profile is omitted, `octx` unsets the matching environment variable during switch. If `ssh_config` is omitted, `octx` removes the generated SSH include target.
 
 Add this once to `~/.ssh/config`:
 
@@ -130,6 +132,7 @@ After selecting a project, `octx`:
 - exports or unsets `AWS_PROFILE`
 - exports or unsets `ALIBABA_CLOUD_PROFILE`
 - exports or unsets `CODEX_PROFILE`
+- exports or unsets `KUBECONFIG`
 - writes `~/.config/opsctx/state.yaml`
 - updates `~/.config/opsctx/ssh-current` to point to the configured project SSH config, or removes it when no `ssh_config` is configured
 
@@ -140,6 +143,8 @@ codex --profile "$CODEX_PROFILE"
 ```
 
 `aliyun_profile` maps to `ALIBABA_CLOUD_PROFILE`, which Alibaba Cloud CLI uses as the active profile for the current terminal session.
+
+`kubeconfig` maps to `KUBECONFIG`. `octx` does not run `kubectl config use-context` or modify kubeconfig files.
 
 ## Files
 
@@ -165,7 +170,7 @@ octx version  # print octx version
 
 ## Doctor
 
-`octx doctor` checks the local setup without changing files or calling cloud APIs. It validates config/state, configured SSH files, current shell environment, available AWS/Aliyun/Codex profiles, and the `octx` binary resolved from `PATH`.
+`octx doctor` checks the local setup without changing files or calling cloud APIs. It validates config/state, configured SSH and kubeconfig files, current shell environment, available AWS/Aliyun/Codex profiles, and the `octx` binary resolved from `PATH`.
 
 ## Release
 
@@ -193,7 +198,6 @@ The workflow builds native binaries, prepares package manifests from the tag ver
 ## Roadmap
 
 - Environment-level switching.
-- Kubeconfig support.
 - Terraform workspace or variable support.
 - Vault or secrets manager integration.
 - Directory-aware auto-switching.

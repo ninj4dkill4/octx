@@ -63,6 +63,42 @@ projects:
 	assertLevel(t, report, Error, "ssh")
 }
 
+func TestRunValidatesKubeconfig(t *testing.T) {
+	dir := t.TempDir()
+	kubeconfig := filepath.Join(dir, "kubeconfig")
+	if err := os.WriteFile(kubeconfig, []byte("apiVersion: v1\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	configFile := writeConfig(t, dir, `
+projects:
+  - code: core
+    kubeconfig: `+kubeconfig+`
+`)
+
+	report := Run(Options{
+		Paths: testPaths(dir, configFile),
+		Env:   testEnv(dir),
+	})
+
+	assertContains(t, report, OK, "kube", "project core kubeconfig exists")
+}
+
+func TestRunErrorsOnMissingKubeconfig(t *testing.T) {
+	dir := t.TempDir()
+	configFile := writeConfig(t, dir, `
+projects:
+  - code: core
+    kubeconfig: `+filepath.Join(dir, "missing-kubeconfig")+`
+`)
+
+	report := Run(Options{
+		Paths: testPaths(dir, configFile),
+		Env:   testEnv(dir),
+	})
+
+	assertLevel(t, report, Error, "kube")
+}
+
 func TestRunErrorsWhenStateProjectMissingFromConfig(t *testing.T) {
 	dir := t.TempDir()
 	configFile := writeConfig(t, dir, `
@@ -87,6 +123,7 @@ func TestRunWarnsOnEnvMismatch(t *testing.T) {
 projects:
   - code: core
     aws_profile: core-devops
+    kubeconfig: `+filepath.Join(dir, "kubeconfig")+`
 `)
 	if err := config.SaveState(filepath.Join(dir, "state.yaml"), config.State{CurrentProject: "core"}); err != nil {
 		t.Fatal(err)
@@ -94,6 +131,7 @@ projects:
 	env := testEnv(dir)
 	env["OPSCTX_PROJECT"] = "core"
 	env["AWS_PROFILE"] = "wrong"
+	env["KUBECONFIG"] = "wrong"
 
 	report := Run(Options{
 		Paths: testPaths(dir, configFile),
@@ -101,6 +139,7 @@ projects:
 	})
 
 	assertContains(t, report, Warn, "env", `AWS_PROFILE="wrong", want "core-devops"`)
+	assertContains(t, report, Warn, "env", `KUBECONFIG="wrong"`)
 }
 
 func TestRunValidatesExternalProfiles(t *testing.T) {
