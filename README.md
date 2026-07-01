@@ -4,7 +4,7 @@
 [![npm version](https://img.shields.io/npm/v/%40ninj4dkill4%2Foctx.svg)](https://www.npmjs.com/package/@ninj4dkill4/octx)
 [![license](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-`octx` is a small terminal context switcher for DevOps work. Pick a project once, then keep AWS, Aliyun, Codex, and SSH aligned in the current shell.
+`octx` is a small terminal context switcher for DevOps work. Pick a project once, then keep cloud profiles, CLI profiles, and SSH aligned in the current shell.
 
 Phase 1 switches by project code only. Projects may still represent environments such as `dev`, `stg`, `uat`, and `prd`, but environment-level switching is intentionally left for a later phase.
 
