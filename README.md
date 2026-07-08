@@ -11,6 +11,7 @@ Phase 1 switches by project code only. Projects may still represent environments
 ## Features
 
 - Fast project picker in the terminal.
+- Picker option to unset the active profiles.
 - Exports `OPSCTX_PROJECT`.
 - Exports or unsets `AWS_PROFILE`, `ALIBABA_CLOUD_PROFILE`, `CODEX_PROFILE`, and `KUBECONFIG`.
 - Updates or clears an SSH include symlink for the selected project.
@@ -112,6 +113,8 @@ Switch context:
 octx
 ```
 
+Choose `unset profiles` in the picker to clear the active `octx` context. This unsets `OPSCTX_PROJECT`, `AWS_PROFILE`, `ALIBABA_CLOUD_PROFILE`, `CODEX_PROFILE`, and `KUBECONFIG`, removes the saved current project state, and removes the generated SSH include target.
+
 Check the current project:
 
 ```sh
@@ -135,6 +138,16 @@ After selecting a project, `octx`:
 - exports or unsets `KUBECONFIG`
 - writes `~/.config/opsctx/state.yaml`
 - updates `~/.config/opsctx/ssh-current` to point to the configured project SSH config, or removes it when no `ssh_config` is configured
+
+After selecting `unset profiles`, `octx`:
+
+- unsets `OPSCTX_PROJECT`
+- unsets `AWS_PROFILE`
+- unsets `ALIBABA_CLOUD_PROFILE`
+- unsets `CODEX_PROFILE`
+- unsets `KUBECONFIG`
+- removes `~/.config/opsctx/state.yaml`
+- removes `~/.config/opsctx/ssh-current`
 
 `CODEX_PROFILE` is intentionally just an environment variable. The `codex` shell wrapper maps it to:
 

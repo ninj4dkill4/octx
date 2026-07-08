@@ -24,6 +24,8 @@ Do not leave provider lists stale. Current switched context types are:
 
 All switched context integrations are optional. Doctor may warn about missing optional profiles, CLIs, SSH config files, or kubeconfig files, but it must not treat those as errors or exit non-zero for them.
 
+The picker must keep an `unset profiles` option. Selecting it clears all `octx`-managed environment variables, removes saved current state, and removes the generated SSH include target.
+
 Prefer neutral project wording in summaries and repository metadata, such as:
 
 ```text

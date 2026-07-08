@@ -156,15 +156,33 @@ func runRoot(cmd *cobra.Command, opts *rootOptions) error {
 	if opts.shell {
 		output = os.Stderr
 	}
-	project, err := opsTUI.Pick(cfg, output)
+	selection, err := opsTUI.Pick(cfg, output)
 	if err != nil {
 		return err
 	}
-	if project == nil {
+	if selection == nil {
+		return nil
+	}
+	if selection.Clear {
+		if _, err := switcher.Clear(switcher.Options{
+			ConfigFile: paths.ConfigFile,
+			StateFile:  paths.StateFile,
+			SSHCurrent: paths.SSHCurrent,
+		}); err != nil {
+			return err
+		}
+		if opts.shell {
+			fmt.Fprint(cmd.OutOrStdout(), switcher.ShellUnsetAll())
+			return nil
+		}
+		fmt.Fprintln(cmd.OutOrStdout(), "Unset profiles")
+		return nil
+	}
+	if selection.Project == nil {
 		return nil
 	}
 
-	result, err := switcher.Switch(project.Code, switcher.Options{
+	result, err := switcher.Switch(selection.Project.Code, switcher.Options{
 		ConfigFile: paths.ConfigFile,
 		StateFile:  paths.StateFile,
 		SSHCurrent: paths.SSHCurrent,

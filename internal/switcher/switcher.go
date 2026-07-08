@@ -22,6 +22,11 @@ type Result struct {
 	SSHCurrent string
 }
 
+type ClearResult struct {
+	StateFile  string
+	SSHCurrent string
+}
+
 func Switch(projectCode string, opts Options) (Result, error) {
 	paths, err := resolvePaths(opts)
 	if err != nil {
@@ -57,6 +62,23 @@ func Switch(projectCode string, opts Options) (Result, error) {
 	}, nil
 }
 
+func Clear(opts Options) (ClearResult, error) {
+	paths, err := resolvePaths(opts)
+	if err != nil {
+		return ClearResult{}, err
+	}
+	if err := os.Remove(config.ExpandPath(paths.StateFile)); err != nil && !os.IsNotExist(err) {
+		return ClearResult{}, err
+	}
+	if err := os.Remove(config.ExpandPath(paths.SSHCurrent)); err != nil && !os.IsNotExist(err) {
+		return ClearResult{}, err
+	}
+	return ClearResult{
+		StateFile:  paths.StateFile,
+		SSHCurrent: paths.SSHCurrent,
+	}, nil
+}
+
 func ShellExports(project config.Project) string {
 	var b strings.Builder
 	writeExport(&b, "OPSCTX_PROJECT", project.Code)
@@ -64,6 +86,20 @@ func ShellExports(project config.Project) string {
 	writeExport(&b, "CODEX_PROFILE", project.CodexProfile)
 	writeExport(&b, "ALIBABA_CLOUD_PROFILE", project.AliyunProfile)
 	writeExport(&b, "KUBECONFIG", project.Kubeconfig)
+	return b.String()
+}
+
+func ShellUnsetAll() string {
+	var b strings.Builder
+	for _, key := range []string{
+		"OPSCTX_PROJECT",
+		"AWS_PROFILE",
+		"CODEX_PROFILE",
+		"ALIBABA_CLOUD_PROFILE",
+		"KUBECONFIG",
+	} {
+		writeExport(&b, key, "")
+	}
 	return b.String()
 }
 

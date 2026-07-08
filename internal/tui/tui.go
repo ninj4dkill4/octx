@@ -17,10 +17,15 @@ type model struct {
 	cursor   int
 	opts     switcher.Options
 	pickOnly bool
-	picked   *config.Project
+	picked   *Selection
 	result   *switcher.Result
 	err      error
 	quitting bool
+}
+
+type Selection struct {
+	Project *config.Project
+	Clear   bool
 }
 
 var (
@@ -38,7 +43,7 @@ func Run(cfg config.Config, opts switcher.Options) (*switcher.Result, error) {
 	return fm.result, nil
 }
 
-func Pick(cfg config.Config, output io.Writer) (*config.Project, error) {
+func Pick(cfg config.Config, output io.Writer) (*Selection, error) {
 	fm, err := run(cfg, switcher.Options{}, true, output)
 	if err != nil {
 		return nil, err
@@ -90,19 +95,28 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.cursor--
 			}
 		case "down", "j":
-			if m.cursor < len(m.projects)-1 {
+			if m.cursor < len(m.projects) {
 				m.cursor++
 			}
 		case "enter":
-			if len(m.projects) == 0 {
-				return m, nil
-			}
-			project := m.projects[m.cursor]
-			if m.pickOnly {
-				m.picked = &project
+			if m.cursor == 0 {
+				if m.pickOnly {
+					m.picked = &Selection{Clear: true}
+					return m, tea.Quit
+				}
+				if _, err := switcher.Clear(m.opts); err != nil {
+					m.err = err
+					return m, tea.Quit
+				}
+				m.result = &switcher.Result{}
 				return m, tea.Quit
 			}
-			result, err := switcher.Switch(m.projects[m.cursor].Code, m.opts)
+			project := m.projects[m.cursor-1]
+			if m.pickOnly {
+				m.picked = &Selection{Project: &project}
+				return m, tea.Quit
+			}
+			result, err := switcher.Switch(project.Code, m.opts)
 			if err != nil {
 				m.err = err
 				return m, tea.Quit
@@ -127,19 +141,26 @@ func (m model) View() string {
 	fmt.Fprintln(&b, titleStyle.Render("Project Context Switcher"))
 	fmt.Fprintln(&b, promptStyle.Render("?")+" Choose a profile")
 
-	if len(m.projects) == 0 {
-		fmt.Fprintln(&b, "  No projects configured")
-		return b.String()
+	clearName := "unset profiles"
+	clearCursor := " "
+	if m.cursor == 0 {
+		clearCursor = cursorStyle.Render("›")
+		clearName = selectedStyle.Render(clearName)
 	}
+	fmt.Fprintf(&b, "%s %s\n", clearCursor, clearName)
 
 	for i, project := range m.projects {
 		cursor := " "
 		name := project.Code
-		if i == m.cursor {
+		if i+1 == m.cursor {
 			cursor = cursorStyle.Render("›")
 			name = selectedStyle.Render(name)
 		}
 		fmt.Fprintf(&b, "%s %s\n", cursor, name)
+	}
+
+	if len(m.projects) == 0 {
+		fmt.Fprintln(&b, "  No projects configured")
 	}
 
 	return b.String()

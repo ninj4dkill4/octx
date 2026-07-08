@@ -126,3 +126,48 @@ func TestShellExportsUnsetOptionalProfiles(t *testing.T) {
 		}
 	}
 }
+
+func TestClearRemovesStateAndSSHCurrent(t *testing.T) {
+	dir := t.TempDir()
+	stateFile := filepath.Join(dir, "state.yaml")
+	sshCurrent := filepath.Join(dir, "ssh-current")
+	sshTarget := filepath.Join(dir, "ssh-target")
+	if err := os.WriteFile(stateFile, []byte("current_project: core\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(sshTarget, []byte("Host core\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(sshTarget, sshCurrent); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := Clear(Options{
+		StateFile:  stateFile,
+		SSHCurrent: sshCurrent,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := os.Stat(stateFile); !os.IsNotExist(err) {
+		t.Fatalf("state file still exists after clear: %v", err)
+	}
+	if _, err := os.Lstat(sshCurrent); !os.IsNotExist(err) {
+		t.Fatalf("ssh current still exists after clear: %v", err)
+	}
+}
+
+func TestShellUnsetAll(t *testing.T) {
+	output := ShellUnsetAll()
+	for _, want := range []string{
+		"unset OPSCTX_PROJECT",
+		"unset AWS_PROFILE",
+		"unset CODEX_PROFILE",
+		"unset ALIBABA_CLOUD_PROFILE",
+		"unset KUBECONFIG",
+	} {
+		if !strings.Contains(output, want) {
+			t.Fatalf("missing %q in shell unset output: %s", want, output)
+		}
+	}
+}
