@@ -113,6 +113,8 @@ Switch context:
 octx
 ```
 
+The picker selects the current project by default. If no current project is saved, it selects the first configured project.
+
 Choose `unset profiles` in the picker to clear the active `octx` context. This unsets `OPSCTX_PROJECT`, `AWS_PROFILE`, `ALIBABA_CLOUD_PROFILE`, `CODEX_PROFILE`, and `KUBECONFIG`, removes the saved current project state, and removes the generated SSH include target.
 
 Check the current project:

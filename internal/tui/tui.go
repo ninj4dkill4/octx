@@ -35,25 +35,26 @@ var (
 	selectedStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("14")).Bold(true)
 )
 
-func Run(cfg config.Config, opts switcher.Options) (*switcher.Result, error) {
-	fm, err := run(cfg, opts, false, nil)
+func Run(cfg config.Config, opts switcher.Options, currentProject string) (*switcher.Result, error) {
+	fm, err := run(cfg, opts, false, currentProject, nil)
 	if err != nil {
 		return nil, err
 	}
 	return fm.result, nil
 }
 
-func Pick(cfg config.Config, output io.Writer) (*Selection, error) {
-	fm, err := run(cfg, switcher.Options{}, true, output)
+func Pick(cfg config.Config, currentProject string, output io.Writer) (*Selection, error) {
+	fm, err := run(cfg, switcher.Options{}, true, currentProject, output)
 	if err != nil {
 		return nil, err
 	}
 	return fm.picked, nil
 }
 
-func run(cfg config.Config, opts switcher.Options, pickOnly bool, output io.Writer) (model, error) {
+func run(cfg config.Config, opts switcher.Options, pickOnly bool, currentProject string, output io.Writer) (model, error) {
 	m := model{
 		projects: cfg.Projects,
+		cursor:   initialCursor(cfg.Projects, currentProject),
 		opts:     opts,
 		pickOnly: pickOnly,
 	}
@@ -77,6 +78,18 @@ func run(cfg config.Config, opts switcher.Options, pickOnly bool, output io.Writ
 		return model{}, fm.err
 	}
 	return fm, nil
+}
+
+func initialCursor(projects []config.Project, currentProject string) int {
+	for i, project := range projects {
+		if project.Code == currentProject {
+			return i + 1
+		}
+	}
+	if len(projects) > 0 {
+		return 1
+	}
+	return 0
 }
 
 func (m model) Init() tea.Cmd {

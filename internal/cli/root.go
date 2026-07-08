@@ -156,7 +156,11 @@ func runRoot(cmd *cobra.Command, opts *rootOptions) error {
 	if opts.shell {
 		output = os.Stderr
 	}
-	selection, err := opsTUI.Pick(cfg, output)
+	currentProject := ""
+	if state, err := config.LoadState(paths.StateFile); err == nil {
+		currentProject = state.CurrentProject
+	}
+	selection, err := opsTUI.Pick(cfg, currentProject, output)
 	if err != nil {
 		return err
 	}
