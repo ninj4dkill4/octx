@@ -65,7 +65,6 @@ type checker struct {
 	opts    Options
 	cfg     config.Config
 	cfgOK   bool
-	state   config.State
 	results []Result
 }
 
@@ -75,7 +74,6 @@ func (c *checker) run() {
 		c.checkExecutable()
 		return
 	}
-	c.checkState()
 	c.checkSSH()
 	c.checkKubeconfig()
 	c.checkEnv()
@@ -119,31 +117,6 @@ func (c *checker) checkConfig() {
 	}
 }
 
-func (c *checker) checkState() {
-	state, err := config.LoadState(c.opts.Paths.StateFile)
-	if err != nil {
-		if errors.Is(err, config.ErrNotFound) {
-			c.add(Warn, "state", fmt.Sprintf("state not found at %s; switch a project first", c.opts.Paths.StateFile))
-			return
-		}
-		c.add(Error, "state", fmt.Sprintf("state invalid at %s: %v", c.opts.Paths.StateFile, err))
-		return
-	}
-
-	c.state = state
-	c.add(OK, "state", fmt.Sprintf("current project is %s", state.CurrentProject))
-	if state.CurrentProject == "" {
-		c.add(Warn, "state", "current project is empty")
-		return
-	}
-	if state.CurrentProject == config.UnsetProjectCode {
-		return
-	}
-	if _, ok := c.cfg.FindProject(state.CurrentProject); !ok {
-		c.add(Warn, "state", fmt.Sprintf("current project %q is not in config", state.CurrentProject))
-	}
-}
-
 func (c *checker) checkSSH() {
 	hasSSHConfig := false
 	for _, project := range c.cfg.Projects {
@@ -159,54 +132,35 @@ func (c *checker) checkSSH() {
 		c.addProject(OK, project.Code, "ssh", "ssh_config exists")
 	}
 	if hasSSHConfig {
-		c.checkSSHInclude()
+		c.checkLegacySSHInclude()
 	}
 
-	if c.state.CurrentProject == "" || c.state.CurrentProject == config.UnsetProjectCode {
-		return
-	}
-	project, ok := c.cfg.FindProject(c.state.CurrentProject)
-	if !ok {
-		return
-	}
-	currentPath := config.ExpandPath(c.opts.Paths.SSHCurrent)
-	if project.SSHConfig == "" {
-		if _, err := os.Lstat(currentPath); err == nil {
-			c.add(Warn, "ssh", fmt.Sprintf("ssh-current exists but current project %s has no ssh_config", project.Code))
-		}
-		return
-	}
-
-	target, err := os.Readlink(currentPath)
-	if err != nil {
-		c.add(Warn, "ssh", fmt.Sprintf("ssh-current is not readable at %s: %v", currentPath, err))
-		return
-	}
-	expected := config.ExpandPath(project.SSHConfig)
-	if target != expected {
-		c.add(Warn, "ssh", fmt.Sprintf("ssh-current points to %s, want %s", target, expected))
-		return
-	}
-	c.add(OK, "ssh", fmt.Sprintf("ssh-current points to current project %s", project.Code))
+	c.checkShellSSHConfig()
 }
 
-func (c *checker) checkSSHInclude() {
+func (c *checker) checkLegacySSHInclude() {
 	path := filepath.Join(c.opts.Env["HOME"], ".ssh", "config")
 	data, err := os.ReadFile(path)
 	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			c.add(Error, "ssh", fmt.Sprintf("%s not found; add `Include %s`", path, c.opts.Paths.SSHCurrent))
-			return
-		}
-		c.add(Error, "ssh", fmt.Sprintf("%s is not readable: %v", path, err))
 		return
 	}
 
-	if !containsSSHInclude(string(data), c.opts.Paths.SSHCurrent, c.opts.Env["HOME"]) {
-		c.add(Error, "ssh", fmt.Sprintf("%s must include %s", path, c.opts.Paths.SSHCurrent))
+	if containsSSHInclude(string(data), c.opts.Paths.SSHCurrent, c.opts.Env["HOME"]) {
+		c.add(Warn, "ssh", fmt.Sprintf("%s still includes legacy %s; remove it when using OCTX_SSH_CONFIG", path, c.opts.Paths.SSHCurrent))
+	}
+}
+
+func (c *checker) checkShellSSHConfig() {
+	path := c.opts.Env["OCTX_SSH_CONFIG"]
+	if path == "" {
 		return
 	}
-	c.add(OK, "ssh", fmt.Sprintf("%s includes %s", path, c.opts.Paths.SSHCurrent))
+	path = config.ExpandPath(path)
+	if _, err := os.Stat(path); err != nil {
+		c.add(Warn, "ssh", fmt.Sprintf("OCTX_SSH_CONFIG %s: %v", path, err))
+		return
+	}
+	c.add(OK, "ssh", fmt.Sprintf("OCTX_SSH_CONFIG points to %s", path))
 }
 
 func (c *checker) checkKubeconfig() {
@@ -224,14 +178,18 @@ func (c *checker) checkKubeconfig() {
 }
 
 func (c *checker) checkEnv() {
-	if c.state.CurrentProject == "" || c.state.CurrentProject == config.UnsetProjectCode {
+	shellProject := c.opts.Env["OPSCTX_PROJECT"]
+	if shellProject == "" || shellProject == config.UnsetProjectCode {
+		c.add(OK, "shell", "context unset")
 		return
 	}
-	project, ok := c.cfg.FindProject(c.state.CurrentProject)
+	project, ok := c.cfg.FindProject(shellProject)
 	if !ok {
+		c.add(Warn, "shell", fmt.Sprintf("OPSCTX_PROJECT=%q is not in config", shellProject))
 		return
 	}
 
+	c.add(OK, "shell", fmt.Sprintf("context is %s", project.Code))
 	c.checkEnvValue("OPSCTX_PROJECT", project.Code)
 	c.checkEnvValue("AWS_PROFILE", project.AWSProfile)
 	c.checkEnvValue("ALIBABA_CLOUD_PROFILE", project.AliyunProfile)
@@ -246,9 +204,7 @@ func (c *checker) checkEnvValue(key, want string) {
 	if want == "" {
 		if ok && got != "" {
 			c.add(Warn, "env", fmt.Sprintf("%s=%q, want unset", key, got))
-			return
 		}
-		c.add(OK, "env", fmt.Sprintf("%s is unset", key))
 		return
 	}
 	if !ok || got != want {
@@ -280,12 +236,14 @@ func (c *checker) checkAWSProfiles() {
 	if len(projects) == 0 {
 		return
 	}
-	if _, err := c.opts.LookPath("aws"); err != nil {
+	cliPath, err := c.opts.LookPath("aws")
+	if err != nil {
 		for _, project := range projects {
 			c.addProject(Warn, project.Code, "aws", "aws CLI not found; skipping AWS profile validation")
 		}
 		return
 	}
+	c.add(OK, "aws", fmt.Sprintf("CLI found at %s", cliPath))
 	output, err := c.opts.RunCommand("aws", "configure", "list-profiles")
 	if err != nil {
 		for _, project := range projects {
@@ -311,12 +269,14 @@ func (c *checker) checkAliyunProfiles() {
 	if len(projects) == 0 {
 		return
 	}
-	if _, err := c.opts.LookPath("aliyun"); err != nil {
+	cliPath, err := c.opts.LookPath("aliyun")
+	if err != nil {
 		for _, project := range projects {
 			c.addProject(Warn, project.Code, "aliyun", "aliyun CLI not found; skipping Aliyun profile validation")
 		}
 		return
 	}
+	c.add(OK, "aliyun", fmt.Sprintf("CLI found at %s", cliPath))
 	output, err := c.opts.RunCommand("aliyun", "configure", "list")
 	if err != nil {
 		for _, project := range projects {
@@ -364,12 +324,14 @@ func (c *checker) checkGCloudConfigs() {
 	if len(projects) == 0 {
 		return
 	}
-	if _, err := c.opts.LookPath("gcloud"); err != nil {
+	cliPath, err := c.opts.LookPath("gcloud")
+	if err != nil {
 		for _, project := range projects {
 			c.addProject(Warn, project.Code, "gcloud", "gcloud CLI not found; skipping GCloud config validation")
 		}
 		return
 	}
+	c.add(OK, "gcloud", fmt.Sprintf("CLI found at %s", cliPath))
 	output, err := c.opts.RunCommand("gcloud", "config", "configurations", "list", "--format=value(name)")
 	if err != nil {
 		for _, project := range projects {
@@ -395,12 +357,14 @@ func (c *checker) checkAzureConfigDirs() {
 	if len(projects) == 0 {
 		return
 	}
-	if _, err := c.opts.LookPath("az"); err != nil {
+	cliPath, err := c.opts.LookPath("az")
+	if err != nil {
 		for _, project := range projects {
 			c.addProject(Warn, project.Code, "azure", "az CLI not found; skipping Azure config validation")
 		}
 		return
 	}
+	c.add(OK, "azure", fmt.Sprintf("CLI found at %s", cliPath))
 	for _, project := range projects {
 		dir := config.ExpandPath(project.AzureConfigDir)
 		info, err := os.Stat(dir)

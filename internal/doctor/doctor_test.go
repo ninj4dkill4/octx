@@ -10,7 +10,7 @@ import (
 	"github.com/ninj4dkill4/octx/internal/config"
 )
 
-func TestRunWarnsWhenStateMissing(t *testing.T) {
+func TestRunReportsUnsetShellContext(t *testing.T) {
 	dir := t.TempDir()
 	configFile := writeConfig(t, dir, `
 projects:
@@ -22,46 +22,34 @@ projects:
 		Env:   testEnv(dir),
 	})
 
-	assertLevel(t, report, Warn, "state")
+	assertContains(t, report, OK, "shell", "context unset")
 	if report.HasErrors() {
-		t.Fatalf("doctor should not fail on missing state: %#v", report.Results)
+		t.Fatalf("doctor should not fail on unset shell context: %#v", report.Results)
 	}
 }
 
-func TestRunAcceptsUnsetState(t *testing.T) {
+func TestRunWarnsWhenShellProjectMissingFromConfig(t *testing.T) {
 	dir := t.TempDir()
 	configFile := writeConfig(t, dir, `
 projects:
   - code: core
 `)
-	if err := config.SaveState(filepath.Join(dir, "state.yaml"), config.State{CurrentProject: config.UnsetProjectCode}); err != nil {
-		t.Fatal(err)
-	}
+	env := testEnv(dir)
+	env["OPSCTX_PROJECT"] = "missing"
 
 	report := Run(Options{
 		Paths: testPaths(dir, configFile),
-		Env:   testEnv(dir),
+		Env:   env,
 	})
 
-	assertContains(t, report, OK, "state", "current project is unset")
+	assertContains(t, report, Warn, "shell", `OPSCTX_PROJECT="missing" is not in config`)
 	if report.HasErrors() {
-		t.Fatalf("doctor should not fail on unset state: %#v", report.Results)
-	}
-	for _, result := range report.Results {
-		if result.Check == "env" {
-			t.Fatalf("env checks should be skipped for unset state: %#v", report.Results)
-		}
-		if result.Check == "state" && strings.Contains(result.Message, "not in config") {
-			t.Fatalf("unset state should not be treated as missing project: %#v", report.Results)
-		}
+		t.Fatalf("doctor should not fail when shell points to an unknown project: %#v", report.Results)
 	}
 }
 
 func TestRunSkipsDependentChecksWhenConfigMissing(t *testing.T) {
 	dir := t.TempDir()
-	if err := config.SaveState(filepath.Join(dir, "state.yaml"), config.State{CurrentProject: "old"}); err != nil {
-		t.Fatal(err)
-	}
 
 	report := Run(Options{
 		Paths: testPaths(dir, filepath.Join(dir, "missing-config.yaml")),
@@ -70,7 +58,7 @@ func TestRunSkipsDependentChecksWhenConfigMissing(t *testing.T) {
 
 	assertContains(t, report, Error, "config", "config not found")
 	for _, result := range report.Results {
-		if result.Check == "state" || result.Check == "ssh" || result.Check == "env" {
+		if result.Check == "shell" || result.Check == "ssh" || result.Check == "env" {
 			t.Fatalf("dependent check %s should be skipped when config is missing: %#v", result.Check, report.Results)
 		}
 	}
@@ -90,10 +78,9 @@ projects:
 	})
 
 	assertProjectContains(t, report, Warn, "core", "ssh", "ssh_config")
-	assertContains(t, report, Error, "ssh", ".ssh/config not found")
 }
 
-func TestRunValidatesSSHInclude(t *testing.T) {
+func TestRunWarnsOnLegacySSHCurrentInclude(t *testing.T) {
 	dir := t.TempDir()
 	sshConfig := filepath.Join(dir, "core-ssh")
 	if err := os.WriteFile(sshConfig, []byte("Host core\n"), 0o600); err != nil {
@@ -111,13 +98,13 @@ projects:
 		Env:   testEnv(dir),
 	})
 
-	assertContains(t, report, OK, "ssh", ".ssh/config")
+	assertContains(t, report, Warn, "ssh", "legacy")
 	if report.HasErrors() {
-		t.Fatalf("doctor should pass when ssh-current is included: %#v", report.Results)
+		t.Fatalf("legacy ssh-current include should warn, not fail: %#v", report.Results)
 	}
 }
 
-func TestRunErrorsWhenSSHIncludeMissing(t *testing.T) {
+func TestRunAllowsMissingSSHInclude(t *testing.T) {
 	dir := t.TempDir()
 	sshConfig := filepath.Join(dir, "core-ssh")
 	if err := os.WriteFile(sshConfig, []byte("Host core\n"), 0o600); err != nil {
@@ -135,31 +122,10 @@ projects:
 		Env:   testEnv(dir),
 	})
 
-	assertContains(t, report, Error, "ssh", "must include")
-	if !report.HasErrors() {
-		t.Fatalf("doctor should fail when ssh-current include is missing: %#v", report.Results)
+	assertProjectContains(t, report, OK, "core", "ssh", "ssh_config exists")
+	if report.HasErrors() {
+		t.Fatalf("missing legacy include should not fail anymore: %#v", report.Results)
 	}
-}
-
-func TestRunErrorsWhenSSHIncludeIsCommented(t *testing.T) {
-	dir := t.TempDir()
-	sshConfig := filepath.Join(dir, "core-ssh")
-	if err := os.WriteFile(sshConfig, []byte("Host core\n"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	configFile := writeConfig(t, dir, `
-projects:
-  - code: core
-    ssh_config: `+sshConfig+`
-`)
-	writeSSHConfig(t, dir, "# Include "+filepath.Join(dir, "ssh-current")+"\n")
-
-	report := Run(Options{
-		Paths: testPaths(dir, configFile),
-		Env:   testEnv(dir),
-	})
-
-	assertContains(t, report, Error, "ssh", "must include")
 }
 
 func TestRunDoesNotRequireSSHIncludeWithoutSSHConfigs(t *testing.T) {
@@ -220,28 +186,7 @@ projects:
 	}
 }
 
-func TestRunWarnsWhenStateProjectMissingFromConfig(t *testing.T) {
-	dir := t.TempDir()
-	configFile := writeConfig(t, dir, `
-projects:
-  - code: core
-`)
-	if err := config.SaveState(filepath.Join(dir, "state.yaml"), config.State{CurrentProject: "missing"}); err != nil {
-		t.Fatal(err)
-	}
-
-	report := Run(Options{
-		Paths: testPaths(dir, configFile),
-		Env:   testEnv(dir),
-	})
-
-	assertContains(t, report, Warn, "state", `current project "missing" is not in config`)
-	if report.HasErrors() {
-		t.Fatalf("doctor should not fail when saved state points to an optional stale project: %#v", report.Results)
-	}
-}
-
-func TestRunWarnsOnEnvMismatch(t *testing.T) {
+func TestRunWarnsOnEnvMismatchWhenShellContextIsSet(t *testing.T) {
 	dir := t.TempDir()
 	configFile := writeConfig(t, dir, `
 projects:
@@ -251,9 +196,6 @@ projects:
     azure_config_dir: `+filepath.Join(dir, "azure")+`
     kubeconfig: `+filepath.Join(dir, "kubeconfig")+`
 `)
-	if err := config.SaveState(filepath.Join(dir, "state.yaml"), config.State{CurrentProject: "core"}); err != nil {
-		t.Fatal(err)
-	}
 	env := testEnv(dir)
 	env["OPSCTX_PROJECT"] = "core"
 	env["AWS_PROFILE"] = "wrong"
@@ -270,6 +212,34 @@ projects:
 	assertContains(t, report, Warn, "env", `CLOUDSDK_ACTIVE_CONFIG_NAME="wrong", want "core-gcp"`)
 	assertContains(t, report, Warn, "env", `AZURE_CONFIG_DIR="wrong"`)
 	assertContains(t, report, Warn, "env", `KUBECONFIG="wrong"`)
+}
+
+func TestRunOmitsUnsetOptionalEnvMatches(t *testing.T) {
+	dir := t.TempDir()
+	configFile := writeConfig(t, dir, `
+projects:
+  - code: core
+    aws_profile: core-devops
+`)
+	env := testEnv(dir)
+	env["OPSCTX_PROJECT"] = "core"
+	env["AWS_PROFILE"] = "core-devops"
+
+	report := Run(Options{
+		Paths: testPaths(dir, configFile),
+		Env:   env,
+		LookPath: func(name string) (string, error) {
+			return "", os.ErrNotExist
+		},
+	})
+
+	for _, result := range report.Results {
+		if result.Check == "env" && strings.Contains(result.Message, "is unset") {
+			t.Fatalf("unset optional env should be omitted, got %#v", report.Results)
+		}
+	}
+	assertContains(t, report, OK, "env", "OPSCTX_PROJECT matches")
+	assertContains(t, report, OK, "env", "AWS_PROFILE matches")
 }
 
 func TestRunValidatesExternalProfiles(t *testing.T) {
@@ -321,10 +291,14 @@ projects:
 		},
 	})
 
+	assertContains(t, report, OK, "aws", `CLI found at /usr/bin/aws`)
 	assertProjectContains(t, report, OK, "core", "aws", `profile "core-devops" exists`)
+	assertContains(t, report, OK, "aliyun", `CLI found at /usr/bin/aliyun`)
 	assertProjectContains(t, report, OK, "core", "aliyun", `profile "core-aliyun" exists`)
 	assertProjectContains(t, report, OK, "core", "codex", `profile "core" exists`)
+	assertContains(t, report, OK, "gcloud", `CLI found at /usr/bin/gcloud`)
 	assertProjectContains(t, report, OK, "core", "gcloud", `configuration "core-gcp" exists`)
+	assertContains(t, report, OK, "azure", `CLI found at /usr/bin/az`)
 	assertProjectContains(t, report, OK, "core", "azure", "config dir")
 	if report.HasErrors() {
 		t.Fatalf("doctor should pass: %#v", report.Results)
@@ -412,7 +386,7 @@ func TestNPMWrapperMatchesNativeBinary(t *testing.T) {
 func testPaths(dir, configFile string) config.Paths {
 	return config.Paths{
 		ConfigFile: configFile,
-		StateFile:  filepath.Join(dir, "state.yaml"),
+		SSHDir:     filepath.Join(dir, "ssh"),
 		SSHCurrent: filepath.Join(dir, "ssh-current"),
 	}
 }

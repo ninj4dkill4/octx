@@ -1,31 +1,28 @@
 package switcher
 
 import (
+	"crypto/sha1"
+	"encoding/hex"
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
-	"time"
 
 	"github.com/ninj4dkill4/octx/internal/config"
 )
 
 type Options struct {
 	ConfigFile string
-	StateFile  string
-	SSHCurrent string
+	SSHDir     string
 }
 
 type Result struct {
-	Project    config.Project
-	StateFile  string
-	SSHCurrent string
+	Project   config.Project
+	SSHConfig string
 }
 
-type ClearResult struct {
-	StateFile  string
-	SSHCurrent string
-}
+type ClearResult struct{}
 
 func Switch(projectCode string, opts Options) (Result, error) {
 	paths, err := resolvePaths(opts)
@@ -43,47 +40,22 @@ func Switch(projectCode string, opts Options) (Result, error) {
 		return Result{}, fmt.Errorf("project %q not found", projectCode)
 	}
 
-	if err := applySSH(project, paths.SSHCurrent); err != nil {
-		return Result{}, err
-	}
-
-	state := config.State{
-		CurrentProject: project.Code,
-		SwitchedAt:     time.Now(),
-	}
-	if err := config.SaveState(paths.StateFile, state); err != nil {
+	sshConfig, err := prepareSSHConfig(project, paths.SSHDir)
+	if err != nil {
 		return Result{}, err
 	}
 
 	return Result{
-		Project:    project,
-		StateFile:  paths.StateFile,
-		SSHCurrent: paths.SSHCurrent,
+		Project:   project,
+		SSHConfig: sshConfig,
 	}, nil
 }
 
 func Clear(opts Options) (ClearResult, error) {
-	paths, err := resolvePaths(opts)
-	if err != nil {
-		return ClearResult{}, err
-	}
-	state := config.State{
-		CurrentProject: config.UnsetProjectCode,
-		SwitchedAt:     time.Now(),
-	}
-	if err := config.SaveState(paths.StateFile, state); err != nil {
-		return ClearResult{}, err
-	}
-	if err := os.Remove(config.ExpandPath(paths.SSHCurrent)); err != nil && !os.IsNotExist(err) {
-		return ClearResult{}, err
-	}
-	return ClearResult{
-		StateFile:  paths.StateFile,
-		SSHCurrent: paths.SSHCurrent,
-	}, nil
+	return ClearResult{}, nil
 }
 
-func ShellExports(project config.Project) string {
+func ShellExports(project config.Project, sshConfig string) string {
 	var b strings.Builder
 	writeExport(&b, "OPSCTX_PROJECT", project.Code)
 	writeExport(&b, "AWS_PROFILE", project.AWSProfile)
@@ -92,6 +64,7 @@ func ShellExports(project config.Project) string {
 	writeExport(&b, "CLOUDSDK_ACTIVE_CONFIG_NAME", project.GCloudConfig)
 	writePathExport(&b, "AZURE_CONFIG_DIR", project.AzureConfigDir)
 	writePathExport(&b, "KUBECONFIG", project.Kubeconfig)
+	writeExport(&b, "OCTX_SSH_CONFIG", sshConfig)
 	return b.String()
 }
 
@@ -105,6 +78,7 @@ func ShellUnsetAll() string {
 		"CLOUDSDK_ACTIVE_CONFIG_NAME",
 		"AZURE_CONFIG_DIR",
 		"KUBECONFIG",
+		"OCTX_SSH_CONFIG",
 	} {
 		writeExport(&b, key, "")
 	}
@@ -119,39 +93,33 @@ func resolvePaths(opts Options) (config.Paths, error) {
 	if opts.ConfigFile != "" {
 		paths.ConfigFile = opts.ConfigFile
 	}
-	if opts.StateFile != "" {
-		paths.StateFile = opts.StateFile
-	}
-	if opts.SSHCurrent != "" {
-		paths.SSHCurrent = opts.SSHCurrent
+	if opts.SSHDir != "" {
+		paths.SSHDir = opts.SSHDir
 	}
 	return paths, nil
 }
 
-func applySSH(project config.Project, currentPath string) error {
-	currentPath = config.ExpandPath(currentPath)
+func prepareSSHConfig(project config.Project, sshDir string) (string, error) {
 	if project.SSHConfig == "" {
-		if err := os.Remove(currentPath); err != nil && !os.IsNotExist(err) {
-			return err
-		}
-		return nil
+		return "", nil
 	}
 
 	source := config.ExpandPath(project.SSHConfig)
 	if _, err := os.Stat(source); err != nil {
-		return fmt.Errorf("ssh config %q: %w", source, err)
+		return "", fmt.Errorf("ssh config %q: %w", source, err)
 	}
 
-	if err := os.MkdirAll(filepath.Dir(currentPath), 0o700); err != nil {
-		return err
+	sshDir = config.ExpandPath(sshDir)
+	if err := os.MkdirAll(sshDir, 0o700); err != nil {
+		return "", err
 	}
 
-	tmpPath := currentPath + ".tmp"
-	_ = os.Remove(tmpPath)
-	if err := os.Symlink(source, tmpPath); err != nil {
-		return err
+	path := filepath.Join(sshDir, safeFileName(project.Code)+".config")
+	content := fmt.Sprintf("Include ~/.ssh/config\nInclude %s\n", source)
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+		return "", err
 	}
-	return os.Rename(tmpPath, currentPath)
+	return path, nil
 }
 
 func writeExport(b *strings.Builder, key, value string) {
@@ -171,4 +139,17 @@ func writePathExport(b *strings.Builder, key, value string) {
 
 func shellQuote(value string) string {
 	return "'" + strings.ReplaceAll(value, "'", "'\\''") + "'"
+}
+
+var unsafeFileNameChars = regexp.MustCompile(`[^A-Za-z0-9_.-]+`)
+
+func safeFileName(value string) string {
+	sum := sha1.Sum([]byte(value))
+	suffix := hex.EncodeToString(sum[:4])
+	value = unsafeFileNameChars.ReplaceAllString(value, "_")
+	value = strings.Trim(value, "._-")
+	if value == "" {
+		value = "project"
+	}
+	return value + "-" + suffix
 }

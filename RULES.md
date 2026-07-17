@@ -22,15 +22,19 @@ Do not leave provider lists stale. Current switched context types are:
 - GCloud configuration via `CLOUDSDK_ACTIVE_CONFIG_NAME`.
 - Azure CLI config directory via `AZURE_CONFIG_DIR`.
 - Kubeconfig via `KUBECONFIG`.
-- SSH include target via `~/.config/opsctx/ssh-current`.
+- SSH config via `OCTX_SSH_CONFIG` and generated per-project files under `~/.config/opsctx/ssh/`.
 
 All switched context integrations are optional. Doctor may warn about missing optional profiles, CLIs, SSH config files, or kubeconfig files, but it must not treat those as errors or exit non-zero for them.
 
-When any project declares `ssh_config`, doctor must fail with `ERROR` if `~/.ssh/config` does not include the generated `ssh-current` path.
+Do not use shared mutable state as active context. The active context is the current shell environment. `state.yaml` and `ssh-current` are legacy only and must not be read or written by switch behavior.
+
+Do not mutate a global SSH symlink or require `Include ~/.config/opsctx/ssh-current`. When any project declares `ssh_config`, switch behavior must generate a per-project SSH config file and export `OCTX_SSH_CONFIG`. Doctor may warn if `~/.ssh/config` still includes the legacy `ssh-current` path, but it must not fail for missing legacy include wiring.
 
 Doctor output must be grouped by `[global]` and project sections. New profile-specific checks must emit scoped project results instead of flat global rows.
 
-The picker must keep an `unset` option at the bottom of the list. Selecting it clears all `octx`-managed environment variables, saves current state as `unset`, and removes the generated SSH include target. The default picker cursor must prefer saved state: `unset` selects the bottom option, a project code selects that project, missing state selects `unset`, and unknown state clears all profiles, saves state as `unset`, and removes the generated SSH include target.
+Doctor should show CLI paths for configured CLI-backed profile integrations under `[global]`, because CLI binaries belong to the machine rather than an individual project. Optional environment variables that are correctly unset should be omitted instead of reported as `OK`; report env rows when a configured value matches or when a value needs attention.
+
+The picker must keep an `unset` option at the bottom of the list. Selecting it clears all `octx`-managed environment variables in the current shell. The default picker cursor must prefer `OPSCTX_PROJECT` from the current shell when it points to a configured project; missing, unset, or unknown shell context selects `unset`.
 
 Prefer neutral project wording in summaries and repository metadata, such as:
 

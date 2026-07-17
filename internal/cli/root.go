@@ -16,14 +16,8 @@ import (
 
 type rootOptions struct {
 	configFile string
-	stateFile  string
-	sshCurrent string
+	sshDir     string
 	shell      bool
-}
-
-type pickerState struct {
-	currentProject string
-	reset          bool
 }
 
 func NewRootCommand() *cobra.Command {
@@ -40,8 +34,7 @@ func NewRootCommand() *cobra.Command {
 	}
 
 	cmd.PersistentFlags().StringVar(&opts.configFile, "config", "", "config file path")
-	cmd.PersistentFlags().StringVar(&opts.stateFile, "state", "", "state file path")
-	cmd.PersistentFlags().StringVar(&opts.sshCurrent, "ssh-current", "", "generated current SSH config path")
+	cmd.PersistentFlags().StringVar(&opts.sshDir, "ssh-dir", "", "generated per-project SSH config directory")
 	cmd.Flags().BoolVar(&opts.shell, "shell", false, "switch selected project and print shell exports for eval")
 	_ = cmd.Flags().MarkHidden("shell")
 
@@ -147,19 +140,12 @@ func newCurrentCommand(opts *rootOptions) *cobra.Command {
 		Use:   "current",
 		Short: "Show current project context",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			paths, err := pathsFromOptions(opts)
-			if err != nil {
-				return err
+			current := os.Getenv("OPSCTX_PROJECT")
+			if current == "" {
+				fmt.Fprintln(cmd.OutOrStdout(), "No current project")
+				return nil
 			}
-			state, err := config.LoadState(paths.StateFile)
-			if err != nil {
-				if errors.Is(err, config.ErrNotFound) {
-					fmt.Fprintln(cmd.OutOrStdout(), "No current project")
-					return nil
-				}
-				return err
-			}
-			fmt.Fprintf(cmd.OutOrStdout(), "%s\n", state.CurrentProject)
+			fmt.Fprintf(cmd.OutOrStdout(), "%s\n", current)
 			return nil
 		},
 	}
@@ -173,11 +159,8 @@ func pathsFromOptions(opts *rootOptions) (config.Paths, error) {
 	if opts.configFile != "" {
 		paths.ConfigFile = opts.configFile
 	}
-	if opts.stateFile != "" {
-		paths.StateFile = opts.stateFile
-	}
-	if opts.sshCurrent != "" {
-		paths.SSHCurrent = opts.sshCurrent
+	if opts.sshDir != "" {
+		paths.SSHDir = opts.sshDir
 	}
 	return paths, nil
 }
@@ -196,20 +179,8 @@ func runRoot(cmd *cobra.Command, opts *rootOptions) error {
 	if opts.shell {
 		output = os.Stderr
 	}
-	pickerState, err := currentProjectForPicker(paths, cfg)
-	if err != nil {
-		return err
-	}
-	if pickerState.reset {
-		if opts.shell {
-			fmt.Fprint(cmd.OutOrStdout(), switcher.ShellUnsetAll())
-			return nil
-		}
-		fmt.Fprintln(cmd.OutOrStdout(), "Unset")
-		return nil
-	}
-
-	selection, err := opsTUI.Pick(cfg, pickerState.currentProject, output)
+	currentProject := currentProjectForPicker(cfg, os.Getenv("OPSCTX_PROJECT"))
+	selection, err := opsTUI.Pick(cfg, currentProject, output)
 	if err != nil {
 		return err
 	}
@@ -217,13 +188,6 @@ func runRoot(cmd *cobra.Command, opts *rootOptions) error {
 		return nil
 	}
 	if selection.Clear {
-		if _, err := switcher.Clear(switcher.Options{
-			ConfigFile: paths.ConfigFile,
-			StateFile:  paths.StateFile,
-			SSHCurrent: paths.SSHCurrent,
-		}); err != nil {
-			return err
-		}
 		if opts.shell {
 			fmt.Fprint(cmd.OutOrStdout(), switcher.ShellUnsetAll())
 			return nil
@@ -237,14 +201,13 @@ func runRoot(cmd *cobra.Command, opts *rootOptions) error {
 
 	result, err := switcher.Switch(selection.Project.Code, switcher.Options{
 		ConfigFile: paths.ConfigFile,
-		StateFile:  paths.StateFile,
-		SSHCurrent: paths.SSHCurrent,
+		SSHDir:     paths.SSHDir,
 	})
 	if err != nil {
 		return err
 	}
 	if opts.shell {
-		fmt.Fprint(cmd.OutOrStdout(), switcher.ShellExports(result.Project))
+		fmt.Fprint(cmd.OutOrStdout(), switcher.ShellExports(result.Project, result.SSHConfig))
 		return nil
 	}
 
@@ -252,27 +215,14 @@ func runRoot(cmd *cobra.Command, opts *rootOptions) error {
 	return nil
 }
 
-func currentProjectForPicker(paths config.Paths, cfg config.Config) (pickerState, error) {
-	state, err := config.LoadState(paths.StateFile)
-	if err != nil {
-		if errors.Is(err, config.ErrNotFound) {
-			return pickerState{currentProject: config.UnsetProjectCode}, nil
-		}
-		return pickerState{}, err
+func currentProjectForPicker(cfg config.Config, shellProject string) string {
+	if shellProject == "" || shellProject == config.UnsetProjectCode {
+		return config.UnsetProjectCode
 	}
-	if state.CurrentProject == "" || state.CurrentProject == config.UnsetProjectCode {
-		return pickerState{currentProject: config.UnsetProjectCode}, nil
+	if _, ok := cfg.FindProject(shellProject); !ok {
+		return config.UnsetProjectCode
 	}
-	if _, ok := cfg.FindProject(state.CurrentProject); !ok {
-		if _, err := switcher.Clear(switcher.Options{
-			StateFile:  paths.StateFile,
-			SSHCurrent: paths.SSHCurrent,
-		}); err != nil {
-			return pickerState{}, fmt.Errorf("current project %q is not in config and could not reset state: %w", state.CurrentProject, err)
-		}
-		return pickerState{currentProject: config.UnsetProjectCode, reset: true}, nil
-	}
-	return pickerState{currentProject: state.CurrentProject}, nil
+	return shellProject
 }
 
 func friendlyConfigError(err error, path string) error {

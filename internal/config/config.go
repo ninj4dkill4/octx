@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"time"
 
 	"gopkg.in/yaml.v3"
 )
@@ -32,14 +31,9 @@ type Project struct {
 	SSHConfig      string `yaml:"ssh_config"`
 }
 
-type State struct {
-	CurrentProject string    `yaml:"current_project"`
-	SwitchedAt     time.Time `yaml:"switched_at"`
-}
-
 type Paths struct {
 	ConfigFile string
-	StateFile  string
+	SSHDir     string
 	SSHCurrent string
 }
 
@@ -51,7 +45,7 @@ func DefaultPaths() (Paths, error) {
 
 	return Paths{
 		ConfigFile: filepath.Join(cfgDir, appName, "config.yaml"),
-		StateFile:  filepath.Join(cfgDir, appName, "state.yaml"),
+		SSHDir:     filepath.Join(cfgDir, appName, "ssh"),
 		SSHCurrent: filepath.Join(cfgDir, appName, "ssh-current"),
 	}, nil
 }
@@ -98,26 +92,6 @@ func (c Config) FindProject(code string) (Project, bool) {
 	return Project{}, false
 }
 
-func LoadState(path string) (State, error) {
-	data, err := os.ReadFile(expandHome(path))
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return State{}, ErrNotFound
-		}
-		return State{}, err
-	}
-
-	var state State
-	if err := yaml.Unmarshal(data, &state); err != nil {
-		return State{}, err
-	}
-	return state, nil
-}
-
-func SaveState(path string, state State) error {
-	return writeYAML(path, state, 0o600)
-}
-
 func WriteSampleConfig(path string) error {
 	return writeFile(path, []byte(`projects:
 - code: core
@@ -144,14 +118,6 @@ func WriteSampleConfig(path string) error {
 
 func ExpandPath(path string) string {
 	return expandHome(path)
-}
-
-func writeYAML(path string, value any, perm os.FileMode) error {
-	data, err := yaml.Marshal(value)
-	if err != nil {
-		return err
-	}
-	return writeFile(path, data, perm)
 }
 
 func writeFile(path string, data []byte, perm os.FileMode) error {

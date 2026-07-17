@@ -9,7 +9,7 @@ import (
 	"github.com/ninj4dkill4/octx/internal/config"
 )
 
-func TestSwitchWritesStateAndSSHCurrent(t *testing.T) {
+func TestSwitchGeneratesProjectSSHConfigWithoutState(t *testing.T) {
 	dir := t.TempDir()
 	sshConfig := filepath.Join(dir, "project-ssh")
 	if err := os.WriteFile(sshConfig, []byte("Host core\n"), 0o600); err != nil {
@@ -22,20 +22,15 @@ projects:
   - code: core
     name: Core Platform
     aws_profile: core-devops
-    codex_profile: core
-    aliyun_profile: core-devops
-    kubeconfig: ~/.kube/core
     ssh_config: `+sshConfig+`
 `), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
 	stateFile := filepath.Join(dir, "state.yaml")
-	sshCurrent := filepath.Join(dir, "ssh-current")
 	result, err := Switch("core", Options{
 		ConfigFile: configFile,
-		StateFile:  stateFile,
-		SSHCurrent: sshCurrent,
+		SSHDir:     filepath.Join(dir, "ssh"),
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -44,15 +39,68 @@ projects:
 	if result.Project.Code != "core" {
 		t.Fatalf("project code = %q, want core", result.Project.Code)
 	}
-	if _, err := os.Stat(stateFile); err != nil {
-		t.Fatalf("state file not written: %v", err)
+	if result.SSHConfig == "" {
+		t.Fatal("missing generated ssh config path")
 	}
-	target, err := os.Readlink(sshCurrent)
+	data, err := os.ReadFile(result.SSHConfig)
 	if err != nil {
-		t.Fatalf("ssh current is not a symlink: %v", err)
+		t.Fatal(err)
 	}
-	if target != sshConfig {
-		t.Fatalf("ssh current target = %q, want %q", target, sshConfig)
+	for _, want := range []string{"Include ~/.ssh/config", "Include " + sshConfig} {
+		if !strings.Contains(string(data), want) {
+			t.Fatalf("generated ssh config missing %q:\n%s", want, data)
+		}
+	}
+	if _, err := os.Stat(stateFile); !os.IsNotExist(err) {
+		t.Fatalf("switch should not write state file: %v", err)
+	}
+}
+
+func TestSwitchKeepsProjectSSHConfigsIsolated(t *testing.T) {
+	dir := t.TempDir()
+	coreSSH := filepath.Join(dir, "core-ssh")
+	paySSH := filepath.Join(dir, "pay-ssh")
+	if err := os.WriteFile(coreSSH, []byte("Host core\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(paySSH, []byte("Host pay\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	configFile := filepath.Join(dir, "config.yaml")
+	if err := os.WriteFile(configFile, []byte(`
+projects:
+  - code: core
+    ssh_config: `+coreSSH+`
+  - code: pay
+    ssh_config: `+paySSH+`
+`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	sshDir := filepath.Join(dir, "ssh")
+	core, err := Switch("core", Options{ConfigFile: configFile, SSHDir: sshDir})
+	if err != nil {
+		t.Fatal(err)
+	}
+	pay, err := Switch("pay", Options{ConfigFile: configFile, SSHDir: sshDir})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if core.SSHConfig == pay.SSHConfig {
+		t.Fatalf("generated ssh configs should be isolated, got %s", core.SSHConfig)
+	}
+	coreData, err := os.ReadFile(core.SSHConfig)
+	if err != nil {
+		t.Fatal(err)
+	}
+	payData, err := os.ReadFile(pay.SSHConfig)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(coreData), coreSSH) || !strings.Contains(string(payData), paySSH) {
+		t.Fatalf("generated configs point to wrong files:\ncore=%s\npay=%s", coreData, payData)
 	}
 }
 
@@ -68,63 +116,26 @@ func TestShellExports(t *testing.T) {
 		GCloudConfig:   "core-gcp",
 		AzureConfigDir: "~/.azure/core",
 		Kubeconfig:     "~/.kube/core",
-	})
-	if !strings.Contains(output, "export AWS_PROFILE='core-devops'") {
-		t.Fatalf("missing AWS_PROFILE export: %s", output)
-	}
-	if !strings.Contains(output, "export ALIBABA_CLOUD_PROFILE='core-aliyun'") {
-		t.Fatalf("missing ALIBABA_CLOUD_PROFILE export: %s", output)
-	}
-	if !strings.Contains(output, "export KUBECONFIG='"+filepath.Join(home, ".kube", "core")+"'") {
-		t.Fatalf("missing KUBECONFIG export: %s", output)
-	}
-	if !strings.Contains(output, "export CLOUDSDK_ACTIVE_CONFIG_NAME='core-gcp'") {
-		t.Fatalf("missing CLOUDSDK_ACTIVE_CONFIG_NAME export: %s", output)
-	}
-	if !strings.Contains(output, "export AZURE_CONFIG_DIR='"+filepath.Join(home, ".azure", "core")+"'") {
-		t.Fatalf("missing AZURE_CONFIG_DIR export: %s", output)
-	}
-}
-
-func TestSwitchClearsOptionalSSHConfig(t *testing.T) {
-	dir := t.TempDir()
-	oldSSHConfig := filepath.Join(dir, "old-ssh")
-	if err := os.WriteFile(oldSSHConfig, []byte("Host old\n"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-
-	configFile := filepath.Join(dir, "config.yaml")
-	if err := os.WriteFile(configFile, []byte(`
-projects:
-  - code: no-ssh
-    name: No SSH
-`), 0o600); err != nil {
-		t.Fatal(err)
-	}
-
-	stateFile := filepath.Join(dir, "state.yaml")
-	sshCurrent := filepath.Join(dir, "ssh-current")
-	if err := os.Symlink(oldSSHConfig, sshCurrent); err != nil {
-		t.Fatal(err)
-	}
-
-	if _, err := Switch("no-ssh", Options{
-		ConfigFile: configFile,
-		StateFile:  stateFile,
-		SSHCurrent: sshCurrent,
-	}); err != nil {
-		t.Fatal(err)
-	}
-
-	if _, err := os.Lstat(sshCurrent); !os.IsNotExist(err) {
-		t.Fatalf("ssh current still exists after switching to project without ssh_config: %v", err)
+	}, filepath.Join(home, ".config", "opsctx", "ssh", "core.config"))
+	for _, want := range []string{
+		"export OPSCTX_PROJECT='core'",
+		"export AWS_PROFILE='core-devops'",
+		"export ALIBABA_CLOUD_PROFILE='core-aliyun'",
+		"export KUBECONFIG='" + filepath.Join(home, ".kube", "core") + "'",
+		"export CLOUDSDK_ACTIVE_CONFIG_NAME='core-gcp'",
+		"export AZURE_CONFIG_DIR='" + filepath.Join(home, ".azure", "core") + "'",
+		"export OCTX_SSH_CONFIG='" + filepath.Join(home, ".config", "opsctx", "ssh", "core.config") + "'",
+	} {
+		if !strings.Contains(output, want) {
+			t.Fatalf("missing %q in shell exports: %s", want, output)
+		}
 	}
 }
 
 func TestShellExportsUnsetOptionalProfiles(t *testing.T) {
 	output := ShellExports(config.Project{
 		Code: "no-profiles",
-	})
+	}, "")
 	for _, want := range []string{
 		"export OPSCTX_PROJECT='no-profiles'",
 		"unset AWS_PROFILE",
@@ -133,44 +144,11 @@ func TestShellExportsUnsetOptionalProfiles(t *testing.T) {
 		"unset CLOUDSDK_ACTIVE_CONFIG_NAME",
 		"unset AZURE_CONFIG_DIR",
 		"unset KUBECONFIG",
+		"unset OCTX_SSH_CONFIG",
 	} {
 		if !strings.Contains(output, want) {
 			t.Fatalf("missing %q in shell exports: %s", want, output)
 		}
-	}
-}
-
-func TestClearSavesUnsetStateAndRemovesSSHCurrent(t *testing.T) {
-	dir := t.TempDir()
-	stateFile := filepath.Join(dir, "state.yaml")
-	sshCurrent := filepath.Join(dir, "ssh-current")
-	sshTarget := filepath.Join(dir, "ssh-target")
-	if err := os.WriteFile(stateFile, []byte("current_project: core\n"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(sshTarget, []byte("Host core\n"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.Symlink(sshTarget, sshCurrent); err != nil {
-		t.Fatal(err)
-	}
-
-	if _, err := Clear(Options{
-		StateFile:  stateFile,
-		SSHCurrent: sshCurrent,
-	}); err != nil {
-		t.Fatal(err)
-	}
-
-	state, err := config.LoadState(stateFile)
-	if err != nil {
-		t.Fatalf("state file not readable after clear: %v", err)
-	}
-	if state.CurrentProject != config.UnsetProjectCode {
-		t.Fatalf("current project = %q, want %q", state.CurrentProject, config.UnsetProjectCode)
-	}
-	if _, err := os.Lstat(sshCurrent); !os.IsNotExist(err) {
-		t.Fatalf("ssh current still exists after clear: %v", err)
 	}
 }
 
@@ -184,6 +162,7 @@ func TestShellUnsetAll(t *testing.T) {
 		"unset CLOUDSDK_ACTIVE_CONFIG_NAME",
 		"unset AZURE_CONFIG_DIR",
 		"unset KUBECONFIG",
+		"unset OCTX_SSH_CONFIG",
 	} {
 		if !strings.Contains(output, want) {
 			t.Fatalf("missing %q in shell unset output: %s", want, output)
