@@ -89,7 +89,9 @@ func ShellExports(project config.Project) string {
 	writeExport(&b, "AWS_PROFILE", project.AWSProfile)
 	writeExport(&b, "CODEX_PROFILE", project.CodexProfile)
 	writeExport(&b, "ALIBABA_CLOUD_PROFILE", project.AliyunProfile)
-	writeExport(&b, "KUBECONFIG", project.Kubeconfig)
+	writeExport(&b, "CLOUDSDK_ACTIVE_CONFIG_NAME", project.GCloudConfig)
+	writePathExport(&b, "AZURE_CONFIG_DIR", project.AzureConfigDir)
+	writePathExport(&b, "KUBECONFIG", project.Kubeconfig)
 	return b.String()
 }
 
@@ -100,6 +102,8 @@ func ShellUnsetAll() string {
 		"AWS_PROFILE",
 		"CODEX_PROFILE",
 		"ALIBABA_CLOUD_PROFILE",
+		"CLOUDSDK_ACTIVE_CONFIG_NAME",
+		"AZURE_CONFIG_DIR",
 		"KUBECONFIG",
 	} {
 		writeExport(&b, key, "")
@@ -156,6 +160,13 @@ func writeExport(b *strings.Builder, key, value string) {
 		return
 	}
 	fmt.Fprintf(b, "export %s=%s\n", key, shellQuote(value))
+}
+
+func writePathExport(b *strings.Builder, key, value string) {
+	if value != "" {
+		value = config.ExpandPath(value)
+	}
+	writeExport(b, key, value)
 }
 
 func shellQuote(value string) string {

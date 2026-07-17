@@ -236,7 +236,9 @@ func (c *checker) checkEnv() {
 	c.checkEnvValue("AWS_PROFILE", project.AWSProfile)
 	c.checkEnvValue("ALIBABA_CLOUD_PROFILE", project.AliyunProfile)
 	c.checkEnvValue("CODEX_PROFILE", project.CodexProfile)
-	c.checkEnvValue("KUBECONFIG", project.Kubeconfig)
+	c.checkEnvValue("CLOUDSDK_ACTIVE_CONFIG_NAME", project.GCloudConfig)
+	c.checkPathEnvValue("AZURE_CONFIG_DIR", project.AzureConfigDir)
+	c.checkPathEnvValue("KUBECONFIG", project.Kubeconfig)
 }
 
 func (c *checker) checkEnvValue(key, want string) {
@@ -256,10 +258,19 @@ func (c *checker) checkEnvValue(key, want string) {
 	c.add(OK, "env", fmt.Sprintf("%s matches", key))
 }
 
+func (c *checker) checkPathEnvValue(key, want string) {
+	if want != "" {
+		want = config.ExpandPath(want)
+	}
+	c.checkEnvValue(key, want)
+}
+
 func (c *checker) checkExternalProfiles() {
 	c.checkAWSProfiles()
 	c.checkAliyunProfiles()
 	c.checkCodexProfiles()
+	c.checkGCloudConfigs()
+	c.checkAzureConfigDirs()
 }
 
 func (c *checker) checkAWSProfiles() {
@@ -343,6 +354,70 @@ func (c *checker) checkCodexProfiles() {
 			continue
 		}
 		c.addProject(OK, project.Code, "codex", fmt.Sprintf("profile %q exists", profile))
+	}
+}
+
+func (c *checker) checkGCloudConfigs() {
+	projects := projectsWithProfile(c.cfg.Projects, func(project config.Project) string {
+		return project.GCloudConfig
+	})
+	if len(projects) == 0 {
+		return
+	}
+	if _, err := c.opts.LookPath("gcloud"); err != nil {
+		for _, project := range projects {
+			c.addProject(Warn, project.Code, "gcloud", "gcloud CLI not found; skipping GCloud config validation")
+		}
+		return
+	}
+	output, err := c.opts.RunCommand("gcloud", "config", "configurations", "list", "--format=value(name)")
+	if err != nil {
+		for _, project := range projects {
+			c.addProject(Warn, project.Code, "gcloud", fmt.Sprintf("could not list GCloud configurations: %v", err))
+		}
+		return
+	}
+	available := parseLineProfiles(output)
+	for _, project := range projects {
+		name := project.GCloudConfig
+		if !available[name] {
+			c.addProject(Warn, project.Code, "gcloud", fmt.Sprintf("configuration %q not found", name))
+			continue
+		}
+		c.addProject(OK, project.Code, "gcloud", fmt.Sprintf("configuration %q exists", name))
+	}
+}
+
+func (c *checker) checkAzureConfigDirs() {
+	projects := projectsWithProfile(c.cfg.Projects, func(project config.Project) string {
+		return project.AzureConfigDir
+	})
+	if len(projects) == 0 {
+		return
+	}
+	if _, err := c.opts.LookPath("az"); err != nil {
+		for _, project := range projects {
+			c.addProject(Warn, project.Code, "azure", "az CLI not found; skipping Azure config validation")
+		}
+		return
+	}
+	for _, project := range projects {
+		dir := config.ExpandPath(project.AzureConfigDir)
+		info, err := os.Stat(dir)
+		if err != nil {
+			c.addProject(Warn, project.Code, "azure", fmt.Sprintf("config dir %s: %v", dir, err))
+			continue
+		}
+		if !info.IsDir() {
+			c.addProject(Warn, project.Code, "azure", fmt.Sprintf("config dir %s is not a directory", dir))
+			continue
+		}
+		configFile := filepath.Join(dir, "config")
+		if _, err := os.Stat(configFile); err != nil {
+			c.addProject(Warn, project.Code, "azure", fmt.Sprintf("config file %s: %v", configFile, err))
+			continue
+		}
+		c.addProject(OK, project.Code, "azure", fmt.Sprintf("config dir %s exists", dir))
 	}
 }
 

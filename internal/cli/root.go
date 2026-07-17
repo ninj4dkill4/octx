@@ -21,13 +21,18 @@ type rootOptions struct {
 	shell      bool
 }
 
+type pickerState struct {
+	currentProject string
+	reset          bool
+}
+
 func NewRootCommand() *cobra.Command {
 	opts := &rootOptions{}
 
 	cmd := &cobra.Command{
 		Use:           "octx",
-		Short:         "Switch devops project context",
-		Long:          "octx switches terminal context by project code for AWS, Aliyun, Codex, and SSH.",
+		Short:         "Switch ops profiles for Codex workflows",
+		Long:          "octx switches ops profiles by project code for Codex, SSH, cloud CLIs, and Kubernetes.",
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runRoot(cmd, opts)
@@ -191,11 +196,20 @@ func runRoot(cmd *cobra.Command, opts *rootOptions) error {
 	if opts.shell {
 		output = os.Stderr
 	}
-	currentProject, err := currentProjectForPicker(paths, cfg)
+	pickerState, err := currentProjectForPicker(paths, cfg)
 	if err != nil {
 		return err
 	}
-	selection, err := opsTUI.Pick(cfg, currentProject, output)
+	if pickerState.reset {
+		if opts.shell {
+			fmt.Fprint(cmd.OutOrStdout(), switcher.ShellUnsetAll())
+			return nil
+		}
+		fmt.Fprintln(cmd.OutOrStdout(), "Unset")
+		return nil
+	}
+
+	selection, err := opsTUI.Pick(cfg, pickerState.currentProject, output)
 	if err != nil {
 		return err
 	}
@@ -238,21 +252,27 @@ func runRoot(cmd *cobra.Command, opts *rootOptions) error {
 	return nil
 }
 
-func currentProjectForPicker(paths config.Paths, cfg config.Config) (string, error) {
+func currentProjectForPicker(paths config.Paths, cfg config.Config) (pickerState, error) {
 	state, err := config.LoadState(paths.StateFile)
 	if err != nil {
 		if errors.Is(err, config.ErrNotFound) {
-			return config.UnsetProjectCode, nil
+			return pickerState{currentProject: config.UnsetProjectCode}, nil
 		}
-		return "", err
+		return pickerState{}, err
 	}
 	if state.CurrentProject == "" || state.CurrentProject == config.UnsetProjectCode {
-		return config.UnsetProjectCode, nil
+		return pickerState{currentProject: config.UnsetProjectCode}, nil
 	}
 	if _, ok := cfg.FindProject(state.CurrentProject); !ok {
-		return "", fmt.Errorf("current project %q is not in config; run `octx doctor` or choose unset after fixing state", state.CurrentProject)
+		if _, err := switcher.Clear(switcher.Options{
+			StateFile:  paths.StateFile,
+			SSHCurrent: paths.SSHCurrent,
+		}); err != nil {
+			return pickerState{}, fmt.Errorf("current project %q is not in config and could not reset state: %w", state.CurrentProject, err)
+		}
+		return pickerState{currentProject: config.UnsetProjectCode, reset: true}, nil
 	}
-	return state.CurrentProject, nil
+	return pickerState{currentProject: state.CurrentProject}, nil
 }
 
 func friendlyConfigError(err error, path string) error {

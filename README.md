@@ -4,24 +4,26 @@
 [![npm version](https://img.shields.io/npm/v/%40ninj4dkill4%2Foctx.svg)](https://www.npmjs.com/package/@ninj4dkill4/octx)
 [![license](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-`octx` is a small terminal context switcher for DevOps work. Pick a project once, then keep cloud profiles, CLI profiles, and SSH aligned in the current shell.
+`octx` is a small terminal helper for switching ops profiles used by Codex workflows. Pick a project once, then keep Codex, SSH, cloud CLIs, and Kubernetes aligned in the current shell.
 
 ## Supported Profiles
 
 | Profile | Config field | Switch behavior |
 | --- | --- | --- |
-| ![AWS](https://img.shields.io/badge/AWS-232F3E?logo=amazonaws&logoColor=white) | `aws_profile` | Exports `AWS_PROFILE` |
-| ![Alibaba Cloud](https://img.shields.io/badge/Alibaba_Cloud-FF6A00?logo=alibabacloud&logoColor=white) | `aliyun_profile` | Exports `ALIBABA_CLOUD_PROFILE` |
 | ![Codex](https://img.shields.io/badge/Codex-111111?logo=openai&logoColor=white) | `codex_profile` | Exports `CODEX_PROFILE` |
-| ![Kubernetes](https://img.shields.io/badge/Kubernetes-326CE5?logo=kubernetes&logoColor=white) | `kubeconfig` | Exports `KUBECONFIG` |
 | ![SSH](https://img.shields.io/badge/SSH-111111?logo=gnubash&logoColor=white) | `ssh_config` | Updates the generated SSH include target |
+| ![AWS](https://img.shields.io/badge/AWS-232F3E?logo=amazonaws&logoColor=white) | `aws_profile` | Exports `AWS_PROFILE` |
+| ![Azure](https://img.shields.io/badge/Azure-0078D4?logo=microsoftazure&logoColor=white) | `azure_config_dir` | Exports `AZURE_CONFIG_DIR` |
+| ![Google Cloud](https://img.shields.io/badge/Google_Cloud-4285F4?logo=googlecloud&logoColor=white) | `gcloud_config` | Exports `CLOUDSDK_ACTIVE_CONFIG_NAME` |
+| ![Alibaba Cloud](https://img.shields.io/badge/Alibaba_Cloud-FF6A00?logo=alibabacloud&logoColor=white) | `aliyun_profile` | Exports `ALIBABA_CLOUD_PROFILE` |
+| ![Kubernetes](https://img.shields.io/badge/Kubernetes-326CE5?logo=kubernetes&logoColor=white) | `kubeconfig` | Exports `KUBECONFIG` |
 
 ## Features
 
 - Fast project picker in the terminal.
 - Picker option to unset the active profiles.
 - Exports `OPSCTX_PROJECT`.
-- Exports or unsets `AWS_PROFILE`, `ALIBABA_CLOUD_PROFILE`, `CODEX_PROFILE`, and `KUBECONFIG`.
+- Exports or unsets `AWS_PROFILE`, `ALIBABA_CLOUD_PROFILE`, `CODEX_PROFILE`, `CLOUDSDK_ACTIVE_CONFIG_NAME`, `AZURE_CONFIG_DIR`, and `KUBECONFIG`.
 - Updates or clears an SSH include symlink for the selected project.
 - Stores the last selected project in local state.
 - Ships as an npm package with native Go binaries for Linux and macOS.
@@ -90,24 +92,28 @@ Example:
 
 ```yaml
 projects:
-  - code: core
-    name: Core Platform
-    aws_profile: core-devops
-    aliyun_profile: core-devops
-    codex_profile: core
-    kubeconfig: ~/.kube/core
-    ssh_config: ~/.ssh/config.d/core
+- code: core
+  name: Core Platform
+  aws_profile: core-devops
+  aliyun_profile: core-devops
+  codex_profile: core
+  gcloud_config: core-devops
+  azure_config_dir: ~/.azure/core
+  kubeconfig: ~/.kube/core
+  ssh_config: ~/.ssh/config.d/core
 
-  - code: pay
-    name: Payment
-    aws_profile: payment-devops
-    aliyun_profile: payment-devops
-    codex_profile: payment
-    kubeconfig: ~/.kube/payment
-    ssh_config: ~/.ssh/config.d/payment
+- code: pay
+  name: Payment
+  aws_profile: payment-devops
+  aliyun_profile: payment-devops
+  codex_profile: payment
+  gcloud_config: payment-devops
+  azure_config_dir: ~/.azure/payment
+  kubeconfig: ~/.kube/payment
+  ssh_config: ~/.ssh/config.d/payment
 ```
 
-Only `code` is required. `aws_profile`, `aliyun_profile`, `codex_profile`, `kubeconfig`, and `ssh_config` are optional. If an optional profile is omitted, `octx` unsets the matching environment variable during switch. If `ssh_config` is omitted, `octx` removes the generated SSH include target.
+Only `code` is required. `aws_profile`, `aliyun_profile`, `codex_profile`, `gcloud_config`, `azure_config_dir`, `kubeconfig`, and `ssh_config` are optional. If an optional profile is omitted, `octx` unsets the matching environment variable during switch. If `ssh_config` is omitted, `octx` removes the generated SSH include target.
 
 Add this once to `~/.ssh/config`:
 
@@ -123,9 +129,9 @@ Switch context:
 octx
 ```
 
-The picker selects the current state by default. If the current state is `unset` or no state is saved yet, the `unset` option is selected. If the saved state points to an unknown project, `octx` reports an error instead of guessing.
+The picker selects the current state by default. If the current state is `unset` or no state is saved yet, the `unset` option is selected. If the saved state points to an unknown project, `octx` clears the active profiles, saves the state as `unset`, and removes the generated SSH include target.
 
-Choose `unset` at the bottom of the picker to clear the active `octx` context. This unsets `OPSCTX_PROJECT`, `AWS_PROFILE`, `ALIBABA_CLOUD_PROFILE`, `CODEX_PROFILE`, and `KUBECONFIG`, saves the current state as `unset`, and removes the generated SSH include target.
+Choose `unset` at the bottom of the picker to clear the active `octx` context. This unsets `OPSCTX_PROJECT`, `AWS_PROFILE`, `ALIBABA_CLOUD_PROFILE`, `CODEX_PROFILE`, `CLOUDSDK_ACTIVE_CONFIG_NAME`, `AZURE_CONFIG_DIR`, and `KUBECONFIG`, saves the current state as `unset`, and removes the generated SSH include target.
 
 Check the current project:
 
@@ -147,6 +153,8 @@ After selecting a project, `octx`:
 - exports or unsets `AWS_PROFILE`
 - exports or unsets `ALIBABA_CLOUD_PROFILE`
 - exports or unsets `CODEX_PROFILE`
+- exports or unsets `CLOUDSDK_ACTIVE_CONFIG_NAME`
+- exports or unsets `AZURE_CONFIG_DIR`
 - exports or unsets `KUBECONFIG`
 - writes `~/.config/opsctx/state.yaml`
 - updates `~/.config/opsctx/ssh-current` to point to the configured project SSH config, or removes it when no `ssh_config` is configured
@@ -157,6 +165,8 @@ After selecting `unset`, `octx`:
 - unsets `AWS_PROFILE`
 - unsets `ALIBABA_CLOUD_PROFILE`
 - unsets `CODEX_PROFILE`
+- unsets `CLOUDSDK_ACTIVE_CONFIG_NAME`
+- unsets `AZURE_CONFIG_DIR`
 - unsets `KUBECONFIG`
 - writes `~/.config/opsctx/state.yaml` with current project `unset`
 - removes `~/.config/opsctx/ssh-current`
@@ -168,6 +178,10 @@ codex --profile "$CODEX_PROFILE"
 ```
 
 `aliyun_profile` maps to `ALIBABA_CLOUD_PROFILE`, which Alibaba Cloud CLI uses as the active profile for the current terminal session.
+
+`gcloud_config` maps to `CLOUDSDK_ACTIVE_CONFIG_NAME`, which Google Cloud SDK uses as the active named configuration for the current terminal session.
+
+`azure_config_dir` maps to `AZURE_CONFIG_DIR`, which Azure CLI uses as the active config directory for the current terminal session.
 
 `kubeconfig` maps to `KUBECONFIG`. `octx` does not run `kubectl config use-context` or modify kubeconfig files.
 
@@ -195,7 +209,7 @@ octx version  # print octx version
 
 ## Doctor
 
-`octx doctor` checks the local setup without changing files or calling cloud APIs. It validates the core config/state, checks required SSH include wiring when `ssh_config` is used, reports optional kubeconfig, AWS, Aliyun, and Codex setup as warnings, checks the current shell environment, and checks the `octx` binary resolved from `PATH`.
+`octx doctor` checks the local setup without changing files or calling cloud APIs. It validates the core config/state, checks required SSH include wiring when `ssh_config` is used, reports optional kubeconfig, AWS, Aliyun, Codex, GCloud, and Azure CLI setup as warnings, checks the current shell environment, and checks the `octx` binary resolved from `PATH`.
 
 Optional integrations are never required for a project. `doctor` exits non-zero only for core config/state errors, not because a machine does not have a configured cloud profile or local file.
 

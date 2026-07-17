@@ -57,12 +57,17 @@ projects:
 }
 
 func TestShellExports(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
 	output := ShellExports(config.Project{
-		Code:          "core",
-		AWSProfile:    "core-devops",
-		CodexProfile:  "core",
-		AliyunProfile: "core-aliyun",
-		Kubeconfig:    "~/.kube/core",
+		Code:           "core",
+		AWSProfile:     "core-devops",
+		CodexProfile:   "core",
+		AliyunProfile:  "core-aliyun",
+		GCloudConfig:   "core-gcp",
+		AzureConfigDir: "~/.azure/core",
+		Kubeconfig:     "~/.kube/core",
 	})
 	if !strings.Contains(output, "export AWS_PROFILE='core-devops'") {
 		t.Fatalf("missing AWS_PROFILE export: %s", output)
@@ -70,8 +75,14 @@ func TestShellExports(t *testing.T) {
 	if !strings.Contains(output, "export ALIBABA_CLOUD_PROFILE='core-aliyun'") {
 		t.Fatalf("missing ALIBABA_CLOUD_PROFILE export: %s", output)
 	}
-	if !strings.Contains(output, "export KUBECONFIG='~/.kube/core'") {
+	if !strings.Contains(output, "export KUBECONFIG='"+filepath.Join(home, ".kube", "core")+"'") {
 		t.Fatalf("missing KUBECONFIG export: %s", output)
+	}
+	if !strings.Contains(output, "export CLOUDSDK_ACTIVE_CONFIG_NAME='core-gcp'") {
+		t.Fatalf("missing CLOUDSDK_ACTIVE_CONFIG_NAME export: %s", output)
+	}
+	if !strings.Contains(output, "export AZURE_CONFIG_DIR='"+filepath.Join(home, ".azure", "core")+"'") {
+		t.Fatalf("missing AZURE_CONFIG_DIR export: %s", output)
 	}
 }
 
@@ -119,6 +130,8 @@ func TestShellExportsUnsetOptionalProfiles(t *testing.T) {
 		"unset AWS_PROFILE",
 		"unset CODEX_PROFILE",
 		"unset ALIBABA_CLOUD_PROFILE",
+		"unset CLOUDSDK_ACTIVE_CONFIG_NAME",
+		"unset AZURE_CONFIG_DIR",
 		"unset KUBECONFIG",
 	} {
 		if !strings.Contains(output, want) {
@@ -168,6 +181,8 @@ func TestShellUnsetAll(t *testing.T) {
 		"unset AWS_PROFILE",
 		"unset CODEX_PROFILE",
 		"unset ALIBABA_CLOUD_PROFILE",
+		"unset CLOUDSDK_ACTIVE_CONFIG_NAME",
+		"unset AZURE_CONFIG_DIR",
 		"unset KUBECONFIG",
 	} {
 		if !strings.Contains(output, want) {

@@ -21,13 +21,15 @@ type Config struct {
 }
 
 type Project struct {
-	Code          string `yaml:"code"`
-	Name          string `yaml:"name"`
-	AWSProfile    string `yaml:"aws_profile"`
-	CodexProfile  string `yaml:"codex_profile"`
-	AliyunProfile string `yaml:"aliyun_profile"`
-	Kubeconfig    string `yaml:"kubeconfig"`
-	SSHConfig     string `yaml:"ssh_config"`
+	Code           string `yaml:"code"`
+	Name           string `yaml:"name"`
+	AWSProfile     string `yaml:"aws_profile"`
+	CodexProfile   string `yaml:"codex_profile"`
+	AliyunProfile  string `yaml:"aliyun_profile"`
+	GCloudConfig   string `yaml:"gcloud_config"`
+	AzureConfigDir string `yaml:"azure_config_dir"`
+	Kubeconfig     string `yaml:"kubeconfig"`
+	SSHConfig      string `yaml:"ssh_config"`
 }
 
 type State struct {
@@ -117,29 +119,27 @@ func SaveState(path string, state State) error {
 }
 
 func WriteSampleConfig(path string) error {
-	cfg := Config{
-		Projects: []Project{
-			{
-				Code:          "core",
-				Name:          "Core Platform",
-				AWSProfile:    "core-devops",
-				CodexProfile:  "core",
-				AliyunProfile: "core-devops",
-				Kubeconfig:    "~/.kube/core",
-				SSHConfig:     "~/.ssh/config.d/core",
-			},
-			{
-				Code:          "pay",
-				Name:          "Payment",
-				AWSProfile:    "payment-devops",
-				CodexProfile:  "payment",
-				AliyunProfile: "payment-devops",
-				Kubeconfig:    "~/.kube/payment",
-				SSHConfig:     "~/.ssh/config.d/payment",
-			},
-		},
-	}
-	return writeYAML(path, cfg, 0o600)
+	return writeFile(path, []byte(`projects:
+- code: core
+  name: Core Platform
+  aws_profile: core-devops
+  aliyun_profile: core-devops
+  codex_profile: core
+  gcloud_config: core-devops
+  azure_config_dir: ~/.azure/core
+  kubeconfig: ~/.kube/core
+  ssh_config: ~/.ssh/config.d/core
+
+- code: pay
+  name: Payment
+  aws_profile: payment-devops
+  aliyun_profile: payment-devops
+  codex_profile: payment
+  gcloud_config: payment-devops
+  azure_config_dir: ~/.azure/payment
+  kubeconfig: ~/.kube/payment
+  ssh_config: ~/.ssh/config.d/payment
+`), 0o600)
 }
 
 func ExpandPath(path string) string {
@@ -147,13 +147,16 @@ func ExpandPath(path string) string {
 }
 
 func writeYAML(path string, value any, perm os.FileMode) error {
-	path = expandHome(path)
-	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
-		return err
-	}
-
 	data, err := yaml.Marshal(value)
 	if err != nil {
+		return err
+	}
+	return writeFile(path, data, perm)
+}
+
+func writeFile(path string, data []byte, perm os.FileMode) error {
+	path = expandHome(path)
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return err
 	}
 	return os.WriteFile(path, data, perm)

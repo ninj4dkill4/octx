@@ -39,6 +39,23 @@ func TestEnterOnLastItemPicksClear(t *testing.T) {
 	}
 }
 
+func TestCursorWrapsAround(t *testing.T) {
+	projects := []config.Project{
+		{Code: "core"},
+		{Code: "pay"},
+	}
+
+	up, _ := model{projects: projects, cursor: 0}.Update(tea.KeyMsg{Type: tea.KeyUp})
+	if got := up.(model).cursor; got != 2 {
+		t.Fatalf("up from first cursor = %d, want 2", got)
+	}
+
+	down, _ := model{projects: projects, cursor: 2}.Update(tea.KeyMsg{Type: tea.KeyDown})
+	if got := down.(model).cursor; got != 0 {
+		t.Fatalf("down from unset cursor = %d, want 0", got)
+	}
+}
+
 func TestInitialCursorPrefersCurrentProject(t *testing.T) {
 	projects := []config.Project{
 		{Code: "core"},

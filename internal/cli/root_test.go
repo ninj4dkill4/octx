@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bytes"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -26,14 +27,14 @@ func TestVersionCommand(t *testing.T) {
 
 func TestCurrentProjectForPickerDefaultsMissingStateToUnset(t *testing.T) {
 	dir := t.TempDir()
-	currentProject, err := currentProjectForPicker(config.Paths{
+	pickerState, err := currentProjectForPicker(config.Paths{
 		StateFile: filepath.Join(dir, "missing-state.yaml"),
 	}, config.Config{Projects: []config.Project{{Code: "core"}}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if currentProject != config.UnsetProjectCode {
-		t.Fatalf("current project = %q, want %q", currentProject, config.UnsetProjectCode)
+	if pickerState.currentProject != config.UnsetProjectCode {
+		t.Fatalf("current project = %q, want %q", pickerState.currentProject, config.UnsetProjectCode)
 	}
 }
 
@@ -44,29 +45,112 @@ func TestCurrentProjectForPickerAcceptsUnsetState(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	currentProject, err := currentProjectForPicker(config.Paths{StateFile: stateFile}, config.Config{
+	pickerState, err := currentProjectForPicker(config.Paths{StateFile: stateFile}, config.Config{
 		Projects: []config.Project{{Code: "core"}},
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if currentProject != config.UnsetProjectCode {
-		t.Fatalf("current project = %q, want %q", currentProject, config.UnsetProjectCode)
+	if pickerState.currentProject != config.UnsetProjectCode {
+		t.Fatalf("current project = %q, want %q", pickerState.currentProject, config.UnsetProjectCode)
 	}
 }
 
-func TestCurrentProjectForPickerRejectsUnknownState(t *testing.T) {
+func TestCurrentProjectForPickerResetsUnknownStateToUnset(t *testing.T) {
 	dir := t.TempDir()
 	stateFile := filepath.Join(dir, "state.yaml")
+	sshCurrent := filepath.Join(dir, "ssh-current")
+	sshTarget := filepath.Join(dir, "ssh-target")
 	if err := config.SaveState(stateFile, config.State{CurrentProject: "missing"}); err != nil {
 		t.Fatal(err)
 	}
+	if err := os.WriteFile(sshTarget, []byte("Host core\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(sshTarget, sshCurrent); err != nil {
+		t.Fatal(err)
+	}
 
-	_, err := currentProjectForPicker(config.Paths{StateFile: stateFile}, config.Config{
+	pickerState, err := currentProjectForPicker(config.Paths{StateFile: stateFile, SSHCurrent: sshCurrent}, config.Config{
 		Projects: []config.Project{{Code: "core"}},
 	})
-	if err == nil || !strings.Contains(err.Error(), `current project "missing" is not in config`) {
-		t.Fatalf("expected unknown state error, got %v", err)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if pickerState.currentProject != config.UnsetProjectCode {
+		t.Fatalf("current project = %q, want %q", pickerState.currentProject, config.UnsetProjectCode)
+	}
+	if !pickerState.reset {
+		t.Fatal("unknown state should mark picker state as reset")
+	}
+	state, err := config.LoadState(stateFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if state.CurrentProject != config.UnsetProjectCode {
+		t.Fatalf("state current project = %q, want %q", state.CurrentProject, config.UnsetProjectCode)
+	}
+	if _, err := os.Lstat(sshCurrent); !os.IsNotExist(err) {
+		t.Fatalf("ssh current still exists after resetting unknown state: %v", err)
+	}
+}
+
+func TestRootShellResetsUnknownStateAndPrintsUnsetExports(t *testing.T) {
+	dir := t.TempDir()
+	configFile := filepath.Join(dir, "config.yaml")
+	stateFile := filepath.Join(dir, "state.yaml")
+	sshCurrent := filepath.Join(dir, "ssh-current")
+	sshTarget := filepath.Join(dir, "ssh-target")
+
+	if err := os.WriteFile(configFile, []byte("projects:\n  - code: core\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := config.SaveState(stateFile, config.State{CurrentProject: "missing"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(sshTarget, []byte("Host core\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(sshTarget, sshCurrent); err != nil {
+		t.Fatal(err)
+	}
+
+	cmd := NewRootCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetArgs([]string{
+		"--config", configFile,
+		"--state", stateFile,
+		"--ssh-current", sshCurrent,
+		"--shell",
+	})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	output := out.String()
+	for _, want := range []string{
+		"unset OPSCTX_PROJECT",
+		"unset AWS_PROFILE",
+		"unset CODEX_PROFILE",
+		"unset ALIBABA_CLOUD_PROFILE",
+		"unset CLOUDSDK_ACTIVE_CONFIG_NAME",
+		"unset AZURE_CONFIG_DIR",
+		"unset KUBECONFIG",
+	} {
+		if !strings.Contains(output, want) {
+			t.Fatalf("missing %q in shell output:\n%s", want, output)
+		}
+	}
+	state, err := config.LoadState(stateFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if state.CurrentProject != config.UnsetProjectCode {
+		t.Fatalf("state current project = %q, want %q", state.CurrentProject, config.UnsetProjectCode)
+	}
+	if _, err := os.Lstat(sshCurrent); !os.IsNotExist(err) {
+		t.Fatalf("ssh current still exists after reset: %v", err)
 	}
 }
 

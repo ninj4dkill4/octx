@@ -19,6 +19,8 @@ Do not leave provider lists stale. Current switched context types are:
 - AWS profile via `AWS_PROFILE`.
 - Aliyun profile via `ALIBABA_CLOUD_PROFILE`.
 - Codex profile via `CODEX_PROFILE`.
+- GCloud configuration via `CLOUDSDK_ACTIVE_CONFIG_NAME`.
+- Azure CLI config directory via `AZURE_CONFIG_DIR`.
 - Kubeconfig via `KUBECONFIG`.
 - SSH include target via `~/.config/opsctx/ssh-current`.
 
@@ -28,7 +30,7 @@ When any project declares `ssh_config`, doctor must fail with `ERROR` if `~/.ssh
 
 Doctor output must be grouped by `[global]` and project sections. New profile-specific checks must emit scoped project results instead of flat global rows.
 
-The picker must keep an `unset` option at the bottom of the list. Selecting it clears all `octx`-managed environment variables, saves current state as `unset`, and removes the generated SSH include target. The default picker cursor must prefer saved state: `unset` selects the bottom option, a project code selects that project, missing state selects `unset`, and unknown state returns an error instead of guessing.
+The picker must keep an `unset` option at the bottom of the list. Selecting it clears all `octx`-managed environment variables, saves current state as `unset`, and removes the generated SSH include target. The default picker cursor must prefer saved state: `unset` selects the bottom option, a project code selects that project, missing state selects `unset`, and unknown state clears all profiles, saves state as `unset`, and removes the generated SSH include target.
 
 Prefer neutral project wording in summaries and repository metadata, such as:
 

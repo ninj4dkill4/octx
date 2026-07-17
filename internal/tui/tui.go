@@ -104,11 +104,15 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.quitting = true
 			return m, tea.Quit
 		case "up", "k":
-			if m.cursor > 0 {
+			if m.cursor == 0 {
+				m.cursor = len(m.projects)
+			} else {
 				m.cursor--
 			}
 		case "down", "j":
-			if m.cursor < len(m.projects) {
+			if m.cursor == len(m.projects) {
+				m.cursor = 0
+			} else {
 				m.cursor++
 			}
 		case "enter":

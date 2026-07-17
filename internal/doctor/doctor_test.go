@@ -247,6 +247,8 @@ func TestRunWarnsOnEnvMismatch(t *testing.T) {
 projects:
   - code: core
     aws_profile: core-devops
+    gcloud_config: core-gcp
+    azure_config_dir: `+filepath.Join(dir, "azure")+`
     kubeconfig: `+filepath.Join(dir, "kubeconfig")+`
 `)
 	if err := config.SaveState(filepath.Join(dir, "state.yaml"), config.State{CurrentProject: "core"}); err != nil {
@@ -255,6 +257,8 @@ projects:
 	env := testEnv(dir)
 	env["OPSCTX_PROJECT"] = "core"
 	env["AWS_PROFILE"] = "wrong"
+	env["CLOUDSDK_ACTIVE_CONFIG_NAME"] = "wrong"
+	env["AZURE_CONFIG_DIR"] = "wrong"
 	env["KUBECONFIG"] = "wrong"
 
 	report := Run(Options{
@@ -263,6 +267,8 @@ projects:
 	})
 
 	assertContains(t, report, Warn, "env", `AWS_PROFILE="wrong", want "core-devops"`)
+	assertContains(t, report, Warn, "env", `CLOUDSDK_ACTIVE_CONFIG_NAME="wrong", want "core-gcp"`)
+	assertContains(t, report, Warn, "env", `AZURE_CONFIG_DIR="wrong"`)
 	assertContains(t, report, Warn, "env", `KUBECONFIG="wrong"`)
 }
 
@@ -275,12 +281,21 @@ func TestRunValidatesExternalProfiles(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(codexHome, "core.config.toml"), []byte("model = \"test\"\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
+	azureDir := filepath.Join(dir, "azure", "core")
+	if err := os.MkdirAll(azureDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(azureDir, "config"), []byte("[cloud]\nname = AzureCloud\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
 	configFile := writeConfig(t, dir, `
 projects:
   - code: core
     aws_profile: core-devops
     aliyun_profile: core-aliyun
     codex_profile: core
+    gcloud_config: core-gcp
+    azure_config_dir: `+azureDir+`
 `)
 	env := testEnv(dir)
 	env["CODEX_HOME"] = codexHome
@@ -298,6 +313,8 @@ projects:
 				return "core-devops\nother\n", nil
 			case "aliyun configure list":
 				return "Profile      | Credential | Valid | Region | Language\n---------    | ---------- | ----- | ------ | --------\ncore-aliyun * | AK:***     | Valid | cn     | en\n", nil
+			case "gcloud config configurations list --format=value(name)":
+				return "core-gcp\nother\n", nil
 			default:
 				return "", fmt.Errorf("unexpected command %s", command)
 			}
@@ -307,6 +324,8 @@ projects:
 	assertProjectContains(t, report, OK, "core", "aws", `profile "core-devops" exists`)
 	assertProjectContains(t, report, OK, "core", "aliyun", `profile "core-aliyun" exists`)
 	assertProjectContains(t, report, OK, "core", "codex", `profile "core" exists`)
+	assertProjectContains(t, report, OK, "core", "gcloud", `configuration "core-gcp" exists`)
+	assertProjectContains(t, report, OK, "core", "azure", "config dir")
 	if report.HasErrors() {
 		t.Fatalf("doctor should pass: %#v", report.Results)
 	}
@@ -320,6 +339,8 @@ projects:
     aws_profile: core-devops
     aliyun_profile: core-aliyun
     codex_profile: core
+    gcloud_config: core-gcp
+    azure_config_dir: `+filepath.Join(dir, "missing-azure")+`
 `)
 
 	report := Run(Options{
@@ -336,8 +357,34 @@ projects:
 	assertProjectContains(t, report, Warn, "core", "aws", `profile "core-devops" not found`)
 	assertProjectContains(t, report, Warn, "core", "aliyun", `profile "core-aliyun" not found`)
 	assertProjectContains(t, report, Warn, "core", "codex", `profile "core" file not found`)
+	assertProjectContains(t, report, Warn, "core", "gcloud", `configuration "core-gcp" not found`)
+	assertProjectContains(t, report, Warn, "core", "azure", "config dir")
 	if report.HasErrors() {
 		t.Fatalf("doctor should not fail on missing optional external profiles: %#v", report.Results)
+	}
+}
+
+func TestRunWarnsWhenGCloudAndAzureCLIsMissing(t *testing.T) {
+	dir := t.TempDir()
+	configFile := writeConfig(t, dir, `
+projects:
+  - code: core
+    gcloud_config: core-gcp
+    azure_config_dir: `+filepath.Join(dir, "azure")+`
+`)
+
+	report := Run(Options{
+		Paths: testPaths(dir, configFile),
+		Env:   testEnv(dir),
+		LookPath: func(name string) (string, error) {
+			return "", os.ErrNotExist
+		},
+	})
+
+	assertProjectContains(t, report, Warn, "core", "gcloud", "gcloud CLI not found")
+	assertProjectContains(t, report, Warn, "core", "azure", "az CLI not found")
+	if report.HasErrors() {
+		t.Fatalf("doctor should not fail when optional cloud CLIs are missing: %#v", report.Results)
 	}
 }
 
