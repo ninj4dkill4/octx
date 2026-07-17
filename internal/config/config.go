@@ -12,6 +12,8 @@ import (
 
 const appName = "opsctx"
 
+const UnsetProjectCode = "unset"
+
 var ErrNotFound = errors.New("config not found")
 
 type Config struct {

@@ -23,6 +23,7 @@ const (
 
 type Result struct {
 	Level   Level
+	Project string
 	Check   string
 	Message string
 }
@@ -90,6 +91,15 @@ func (c *checker) add(level Level, check, message string) {
 	})
 }
 
+func (c *checker) addProject(level Level, project, check, message string) {
+	c.results = append(c.results, Result{
+		Level:   level,
+		Project: project,
+		Check:   check,
+		Message: message,
+	})
+}
+
 func (c *checker) checkConfig() {
 	cfg, err := config.LoadConfig(c.opts.Paths.ConfigFile)
 	if err != nil {
@@ -126,25 +136,33 @@ func (c *checker) checkState() {
 		c.add(Warn, "state", "current project is empty")
 		return
 	}
+	if state.CurrentProject == config.UnsetProjectCode {
+		return
+	}
 	if _, ok := c.cfg.FindProject(state.CurrentProject); !ok {
 		c.add(Warn, "state", fmt.Sprintf("current project %q is not in config", state.CurrentProject))
 	}
 }
 
 func (c *checker) checkSSH() {
+	hasSSHConfig := false
 	for _, project := range c.cfg.Projects {
 		if project.SSHConfig == "" {
 			continue
 		}
+		hasSSHConfig = true
 		path := config.ExpandPath(project.SSHConfig)
 		if _, err := os.Stat(path); err != nil {
-			c.add(Warn, "ssh", fmt.Sprintf("project %s ssh_config %s: %v", project.Code, path, err))
+			c.addProject(Warn, project.Code, "ssh", fmt.Sprintf("ssh_config %s: %v", path, err))
 			continue
 		}
-		c.add(OK, "ssh", fmt.Sprintf("project %s ssh_config exists", project.Code))
+		c.addProject(OK, project.Code, "ssh", "ssh_config exists")
+	}
+	if hasSSHConfig {
+		c.checkSSHInclude()
 	}
 
-	if c.state.CurrentProject == "" {
+	if c.state.CurrentProject == "" || c.state.CurrentProject == config.UnsetProjectCode {
 		return
 	}
 	project, ok := c.cfg.FindProject(c.state.CurrentProject)
@@ -172,6 +190,25 @@ func (c *checker) checkSSH() {
 	c.add(OK, "ssh", fmt.Sprintf("ssh-current points to current project %s", project.Code))
 }
 
+func (c *checker) checkSSHInclude() {
+	path := filepath.Join(c.opts.Env["HOME"], ".ssh", "config")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			c.add(Error, "ssh", fmt.Sprintf("%s not found; add `Include %s`", path, c.opts.Paths.SSHCurrent))
+			return
+		}
+		c.add(Error, "ssh", fmt.Sprintf("%s is not readable: %v", path, err))
+		return
+	}
+
+	if !containsSSHInclude(string(data), c.opts.Paths.SSHCurrent, c.opts.Env["HOME"]) {
+		c.add(Error, "ssh", fmt.Sprintf("%s must include %s", path, c.opts.Paths.SSHCurrent))
+		return
+	}
+	c.add(OK, "ssh", fmt.Sprintf("%s includes %s", path, c.opts.Paths.SSHCurrent))
+}
+
 func (c *checker) checkKubeconfig() {
 	for _, project := range c.cfg.Projects {
 		if project.Kubeconfig == "" {
@@ -179,15 +216,15 @@ func (c *checker) checkKubeconfig() {
 		}
 		path := config.ExpandPath(project.Kubeconfig)
 		if _, err := os.Stat(path); err != nil {
-			c.add(Warn, "kube", fmt.Sprintf("project %s kubeconfig %s: %v", project.Code, path, err))
+			c.addProject(Warn, project.Code, "kube", fmt.Sprintf("kubeconfig %s: %v", path, err))
 			continue
 		}
-		c.add(OK, "kube", fmt.Sprintf("project %s kubeconfig exists", project.Code))
+		c.addProject(OK, project.Code, "kube", "kubeconfig exists")
 	}
 }
 
 func (c *checker) checkEnv() {
-	if c.state.CurrentProject == "" {
+	if c.state.CurrentProject == "" || c.state.CurrentProject == config.UnsetProjectCode {
 		return
 	}
 	project, ok := c.cfg.FindProject(c.state.CurrentProject)
@@ -226,75 +263,86 @@ func (c *checker) checkExternalProfiles() {
 }
 
 func (c *checker) checkAWSProfiles() {
-	required := uniqueProfiles(c.cfg.Projects, func(project config.Project) string {
+	projects := projectsWithProfile(c.cfg.Projects, func(project config.Project) string {
 		return project.AWSProfile
 	})
-	if len(required) == 0 {
+	if len(projects) == 0 {
 		return
 	}
 	if _, err := c.opts.LookPath("aws"); err != nil {
-		c.add(Warn, "aws", "aws CLI not found; skipping AWS profile validation")
+		for _, project := range projects {
+			c.addProject(Warn, project.Code, "aws", "aws CLI not found; skipping AWS profile validation")
+		}
 		return
 	}
 	output, err := c.opts.RunCommand("aws", "configure", "list-profiles")
 	if err != nil {
-		c.add(Warn, "aws", fmt.Sprintf("could not list AWS profiles: %v", err))
+		for _, project := range projects {
+			c.addProject(Warn, project.Code, "aws", fmt.Sprintf("could not list AWS profiles: %v", err))
+		}
 		return
 	}
 	available := parseLineProfiles(output)
-	for _, profile := range required {
+	for _, project := range projects {
+		profile := project.AWSProfile
 		if !available[profile] {
-			c.add(Warn, "aws", fmt.Sprintf("profile %q not found", profile))
+			c.addProject(Warn, project.Code, "aws", fmt.Sprintf("profile %q not found", profile))
 			continue
 		}
-		c.add(OK, "aws", fmt.Sprintf("profile %q exists", profile))
+		c.addProject(OK, project.Code, "aws", fmt.Sprintf("profile %q exists", profile))
 	}
 }
 
 func (c *checker) checkAliyunProfiles() {
-	required := uniqueProfiles(c.cfg.Projects, func(project config.Project) string {
+	projects := projectsWithProfile(c.cfg.Projects, func(project config.Project) string {
 		return project.AliyunProfile
 	})
-	if len(required) == 0 {
+	if len(projects) == 0 {
 		return
 	}
 	if _, err := c.opts.LookPath("aliyun"); err != nil {
-		c.add(Warn, "aliyun", "aliyun CLI not found; skipping Aliyun profile validation")
+		for _, project := range projects {
+			c.addProject(Warn, project.Code, "aliyun", "aliyun CLI not found; skipping Aliyun profile validation")
+		}
 		return
 	}
 	output, err := c.opts.RunCommand("aliyun", "configure", "list")
 	if err != nil {
-		c.add(Warn, "aliyun", fmt.Sprintf("could not list Aliyun profiles: %v", err))
+		for _, project := range projects {
+			c.addProject(Warn, project.Code, "aliyun", fmt.Sprintf("could not list Aliyun profiles: %v", err))
+		}
 		return
 	}
 	available := parseAliyunProfiles(output)
-	for _, profile := range required {
+	for _, project := range projects {
+		profile := project.AliyunProfile
 		if !available[profile] {
-			c.add(Warn, "aliyun", fmt.Sprintf("profile %q not found", profile))
+			c.addProject(Warn, project.Code, "aliyun", fmt.Sprintf("profile %q not found", profile))
 			continue
 		}
-		c.add(OK, "aliyun", fmt.Sprintf("profile %q exists", profile))
+		c.addProject(OK, project.Code, "aliyun", fmt.Sprintf("profile %q exists", profile))
 	}
 }
 
 func (c *checker) checkCodexProfiles() {
-	required := uniqueProfiles(c.cfg.Projects, func(project config.Project) string {
+	projects := projectsWithProfile(c.cfg.Projects, func(project config.Project) string {
 		return project.CodexProfile
 	})
-	if len(required) == 0 {
+	if len(projects) == 0 {
 		return
 	}
 	base := c.opts.Env["CODEX_HOME"]
 	if base == "" {
 		base = filepath.Join(c.opts.Env["HOME"], ".codex")
 	}
-	for _, profile := range required {
+	for _, project := range projects {
+		profile := project.CodexProfile
 		path := filepath.Join(base, profile+".config.toml")
 		if _, err := os.Stat(path); err != nil {
-			c.add(Warn, "codex", fmt.Sprintf("profile %q file not found at %s", profile, path))
+			c.addProject(Warn, project.Code, "codex", fmt.Sprintf("profile %q file not found at %s", profile, path))
 			continue
 		}
-		c.add(OK, "codex", fmt.Sprintf("profile %q exists", profile))
+		c.addProject(OK, project.Code, "codex", fmt.Sprintf("profile %q exists", profile))
 	}
 }
 
@@ -381,6 +429,16 @@ func uniqueProfiles(projects []config.Project, profile func(config.Project) stri
 	return result
 }
 
+func projectsWithProfile(projects []config.Project, profile func(config.Project) string) []config.Project {
+	var result []config.Project
+	for _, project := range projects {
+		if profile(project) != "" {
+			result = append(result, project)
+		}
+	}
+	return result
+}
+
 func parseLineProfiles(output string) map[string]bool {
 	profiles := make(map[string]bool)
 	for _, line := range strings.Split(output, "\n") {
@@ -410,6 +468,40 @@ func parseAliyunProfiles(output string) map[string]bool {
 		}
 	}
 	return profiles
+}
+
+func containsSSHInclude(content, currentPath, home string) bool {
+	want := cleanSSHPath(currentPath, home)
+	for _, line := range strings.Split(content, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		fields := strings.Fields(line)
+		if len(fields) < 2 || !strings.EqualFold(fields[0], "Include") {
+			continue
+		}
+		for _, field := range fields[1:] {
+			if strings.HasPrefix(field, "#") {
+				break
+			}
+			if cleanSSHPath(field, home) == want {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func cleanSSHPath(path, home string) string {
+	path = strings.Trim(path, `"'`)
+	if path == "~" {
+		return home
+	}
+	if strings.HasPrefix(path, "~/") {
+		return filepath.Join(home, path[2:])
+	}
+	return config.ExpandPath(path)
 }
 
 func findInPath(name, pathValue string) (string, error) {

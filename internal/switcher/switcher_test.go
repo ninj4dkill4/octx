@@ -127,7 +127,7 @@ func TestShellExportsUnsetOptionalProfiles(t *testing.T) {
 	}
 }
 
-func TestClearRemovesStateAndSSHCurrent(t *testing.T) {
+func TestClearSavesUnsetStateAndRemovesSSHCurrent(t *testing.T) {
 	dir := t.TempDir()
 	stateFile := filepath.Join(dir, "state.yaml")
 	sshCurrent := filepath.Join(dir, "ssh-current")
@@ -149,8 +149,12 @@ func TestClearRemovesStateAndSSHCurrent(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := os.Stat(stateFile); !os.IsNotExist(err) {
-		t.Fatalf("state file still exists after clear: %v", err)
+	state, err := config.LoadState(stateFile)
+	if err != nil {
+		t.Fatalf("state file not readable after clear: %v", err)
+	}
+	if state.CurrentProject != config.UnsetProjectCode {
+		t.Fatalf("current project = %q, want %q", state.CurrentProject, config.UnsetProjectCode)
 	}
 	if _, err := os.Lstat(sshCurrent); !os.IsNotExist(err) {
 		t.Fatalf("ssh current still exists after clear: %v", err)

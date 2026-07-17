@@ -11,21 +11,24 @@ import (
 func TestViewShowsUnsetProfilesOption(t *testing.T) {
 	m := model{
 		projects: []config.Project{{Code: "core"}},
-		cursor:   1,
 	}
 
 	view := m.View()
-	if !strings.Contains(view, "unset profiles") {
-		t.Fatalf("view missing unset profiles option: %s", view)
-	}
 	if !strings.Contains(view, "core") {
 		t.Fatalf("view missing project option: %s", view)
 	}
+	if !strings.Contains(view, "unset") {
+		t.Fatalf("view missing unset option: %s", view)
+	}
+	if strings.Index(view, "core") > strings.Index(view, "unset") {
+		t.Fatalf("unset option should be below project options: %s", view)
+	}
 }
 
-func TestEnterOnFirstItemPicksClear(t *testing.T) {
+func TestEnterOnLastItemPicksClear(t *testing.T) {
 	m := model{
 		projects: []config.Project{{Code: "core"}},
+		cursor:   1,
 		pickOnly: true,
 	}
 
@@ -42,19 +45,30 @@ func TestInitialCursorPrefersCurrentProject(t *testing.T) {
 		{Code: "pay"},
 	}
 
-	if got := initialCursor(projects, "pay"); got != 2 {
-		t.Fatalf("cursor = %d, want 2", got)
+	if got := initialCursor(projects, "pay"); got != 1 {
+		t.Fatalf("cursor = %d, want 1", got)
 	}
 }
 
-func TestInitialCursorDefaultsToFirstProject(t *testing.T) {
+func TestInitialCursorPrefersUnsetState(t *testing.T) {
 	projects := []config.Project{
 		{Code: "core"},
 		{Code: "pay"},
 	}
 
-	if got := initialCursor(projects, "missing"); got != 1 {
-		t.Fatalf("cursor = %d, want 1", got)
+	if got := initialCursor(projects, config.UnsetProjectCode); got != 2 {
+		t.Fatalf("cursor = %d, want 2", got)
+	}
+}
+
+func TestInitialCursorDefaultsToClearForUnknownState(t *testing.T) {
+	projects := []config.Project{
+		{Code: "core"},
+		{Code: "pay"},
+	}
+
+	if got := initialCursor(projects, "missing"); got != 2 {
+		t.Fatalf("cursor = %d, want 2", got)
 	}
 }
 

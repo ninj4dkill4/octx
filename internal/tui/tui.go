@@ -81,15 +81,15 @@ func run(cfg config.Config, opts switcher.Options, pickOnly bool, currentProject
 }
 
 func initialCursor(projects []config.Project, currentProject string) int {
+	if currentProject == config.UnsetProjectCode {
+		return len(projects)
+	}
 	for i, project := range projects {
 		if project.Code == currentProject {
-			return i + 1
+			return i
 		}
 	}
-	if len(projects) > 0 {
-		return 1
-	}
-	return 0
+	return len(projects)
 }
 
 func (m model) Init() tea.Cmd {
@@ -112,7 +112,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.cursor++
 			}
 		case "enter":
-			if m.cursor == 0 {
+			if m.cursor == len(m.projects) {
 				if m.pickOnly {
 					m.picked = &Selection{Clear: true}
 					return m, tea.Quit
@@ -124,7 +124,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.result = &switcher.Result{}
 				return m, tea.Quit
 			}
-			project := m.projects[m.cursor-1]
+			project := m.projects[m.cursor]
 			if m.pickOnly {
 				m.picked = &Selection{Project: &project}
 				return m, tea.Quit
@@ -154,23 +154,23 @@ func (m model) View() string {
 	fmt.Fprintln(&b, titleStyle.Render("Project Context Switcher"))
 	fmt.Fprintln(&b, promptStyle.Render("?")+" Choose a profile")
 
-	clearName := "unset profiles"
-	clearCursor := " "
-	if m.cursor == 0 {
-		clearCursor = cursorStyle.Render("›")
-		clearName = selectedStyle.Render(clearName)
-	}
-	fmt.Fprintf(&b, "%s %s\n", clearCursor, clearName)
-
 	for i, project := range m.projects {
 		cursor := " "
 		name := project.Code
-		if i+1 == m.cursor {
+		if i == m.cursor {
 			cursor = cursorStyle.Render("›")
 			name = selectedStyle.Render(name)
 		}
 		fmt.Fprintf(&b, "%s %s\n", cursor, name)
 	}
+
+	clearName := config.UnsetProjectCode
+	clearCursor := " "
+	if m.cursor == len(m.projects) {
+		clearCursor = cursorStyle.Render("›")
+		clearName = selectedStyle.Render(clearName)
+	}
+	fmt.Fprintf(&b, "%s %s\n", clearCursor, clearName)
 
 	if len(m.projects) == 0 {
 		fmt.Fprintln(&b, "  No projects configured")

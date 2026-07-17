@@ -6,7 +6,15 @@
 
 `octx` is a small terminal context switcher for DevOps work. Pick a project once, then keep cloud profiles, CLI profiles, and SSH aligned in the current shell.
 
-Phase 1 switches by project code only. Projects may still represent environments such as `dev`, `stg`, `uat`, and `prd`, but environment-level switching is intentionally left for a later phase.
+## Supported Profiles
+
+| Profile | Config field | Switch behavior |
+| --- | --- | --- |
+| ![AWS](https://img.shields.io/badge/AWS-232F3E?logo=amazonaws&logoColor=white) | `aws_profile` | Exports `AWS_PROFILE` |
+| ![Alibaba Cloud](https://img.shields.io/badge/Alibaba_Cloud-FF6A00?logo=alibabacloud&logoColor=white) | `aliyun_profile` | Exports `ALIBABA_CLOUD_PROFILE` |
+| ![Codex](https://img.shields.io/badge/Codex-111111?logo=openai&logoColor=white) | `codex_profile` | Exports `CODEX_PROFILE` |
+| ![Kubernetes](https://img.shields.io/badge/Kubernetes-326CE5?logo=kubernetes&logoColor=white) | `kubeconfig` | Exports `KUBECONFIG` |
+| ![SSH](https://img.shields.io/badge/SSH-111111?logo=gnubash&logoColor=white) | `ssh_config` | Updates the generated SSH include target |
 
 ## Features
 
@@ -107,15 +115,17 @@ Add this once to `~/.ssh/config`:
 Include ~/.config/opsctx/ssh-current
 ```
 
+If any project uses `ssh_config`, `octx doctor` fails until this include is present.
+
 Switch context:
 
 ```sh
 octx
 ```
 
-The picker selects the current project by default. If no current project is saved, it selects the first configured project.
+The picker selects the current state by default. If the current state is `unset` or no state is saved yet, the `unset` option is selected. If the saved state points to an unknown project, `octx` reports an error instead of guessing.
 
-Choose `unset profiles` in the picker to clear the active `octx` context. This unsets `OPSCTX_PROJECT`, `AWS_PROFILE`, `ALIBABA_CLOUD_PROFILE`, `CODEX_PROFILE`, and `KUBECONFIG`, removes the saved current project state, and removes the generated SSH include target.
+Choose `unset` at the bottom of the picker to clear the active `octx` context. This unsets `OPSCTX_PROJECT`, `AWS_PROFILE`, `ALIBABA_CLOUD_PROFILE`, `CODEX_PROFILE`, and `KUBECONFIG`, saves the current state as `unset`, and removes the generated SSH include target.
 
 Check the current project:
 
@@ -141,14 +151,14 @@ After selecting a project, `octx`:
 - writes `~/.config/opsctx/state.yaml`
 - updates `~/.config/opsctx/ssh-current` to point to the configured project SSH config, or removes it when no `ssh_config` is configured
 
-After selecting `unset profiles`, `octx`:
+After selecting `unset`, `octx`:
 
 - unsets `OPSCTX_PROJECT`
 - unsets `AWS_PROFILE`
 - unsets `ALIBABA_CLOUD_PROFILE`
 - unsets `CODEX_PROFILE`
 - unsets `KUBECONFIG`
-- removes `~/.config/opsctx/state.yaml`
+- writes `~/.config/opsctx/state.yaml` with current project `unset`
 - removes `~/.config/opsctx/ssh-current`
 
 `CODEX_PROFILE` is intentionally just an environment variable. The `codex` shell wrapper maps it to:
@@ -185,9 +195,11 @@ octx version  # print octx version
 
 ## Doctor
 
-`octx doctor` checks the local setup without changing files or calling cloud APIs. It validates the core config/state, reports optional SSH, kubeconfig, AWS, Aliyun, and Codex setup as warnings, checks the current shell environment, and checks the `octx` binary resolved from `PATH`.
+`octx doctor` checks the local setup without changing files or calling cloud APIs. It validates the core config/state, checks required SSH include wiring when `ssh_config` is used, reports optional kubeconfig, AWS, Aliyun, and Codex setup as warnings, checks the current shell environment, and checks the `octx` binary resolved from `PATH`.
 
 Optional integrations are never required for a project. `doctor` exits non-zero only for core config/state errors, not because a machine does not have a configured cloud profile or local file.
+
+Doctor output is grouped by `[global]` and one section per project.
 
 ## Release
 

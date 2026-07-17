@@ -3,6 +3,7 @@ package cli
 import (
 	"errors"
 	"fmt"
+	"io"
 	"os"
 
 	"github.com/ninj4dkill4/octx/internal/config"
@@ -81,14 +82,48 @@ func newDoctorCommand(opts *rootOptions) *cobra.Command {
 				return err
 			}
 			report := doctor.Run(doctor.Options{Paths: paths})
-			for _, result := range report.Results {
-				fmt.Fprintf(cmd.OutOrStdout(), "%-5s %-8s %s\n", result.Level, result.Check, result.Message)
-			}
+			writeDoctorReport(cmd.OutOrStdout(), report)
 			if report.HasErrors() {
 				return fmt.Errorf("doctor found %d error(s)", report.ErrorCount())
 			}
 			return nil
 		},
+	}
+}
+
+func writeDoctorReport(out io.Writer, report doctor.Report) {
+	var global []doctor.Result
+	projectOrder := make([]string, 0)
+	projectResults := make(map[string][]doctor.Result)
+	for _, result := range report.Results {
+		if result.Project == "" {
+			global = append(global, result)
+			continue
+		}
+		if _, ok := projectResults[result.Project]; !ok {
+			projectOrder = append(projectOrder, result.Project)
+		}
+		projectResults[result.Project] = append(projectResults[result.Project], result)
+	}
+
+	wroteSection := false
+	writeSection := func(name string, results []doctor.Result) {
+		if len(results) == 0 {
+			return
+		}
+		if wroteSection {
+			fmt.Fprintln(out)
+		}
+		fmt.Fprintf(out, "[%s]\n", name)
+		for _, result := range results {
+			fmt.Fprintf(out, "%-5s %-8s %s\n", result.Level, result.Check, result.Message)
+		}
+		wroteSection = true
+	}
+
+	writeSection("global", global)
+	for _, project := range projectOrder {
+		writeSection(project, projectResults[project])
 	}
 }
 
@@ -156,9 +191,9 @@ func runRoot(cmd *cobra.Command, opts *rootOptions) error {
 	if opts.shell {
 		output = os.Stderr
 	}
-	currentProject := ""
-	if state, err := config.LoadState(paths.StateFile); err == nil {
-		currentProject = state.CurrentProject
+	currentProject, err := currentProjectForPicker(paths, cfg)
+	if err != nil {
+		return err
 	}
 	selection, err := opsTUI.Pick(cfg, currentProject, output)
 	if err != nil {
@@ -179,7 +214,7 @@ func runRoot(cmd *cobra.Command, opts *rootOptions) error {
 			fmt.Fprint(cmd.OutOrStdout(), switcher.ShellUnsetAll())
 			return nil
 		}
-		fmt.Fprintln(cmd.OutOrStdout(), "Unset profiles")
+		fmt.Fprintln(cmd.OutOrStdout(), "Unset")
 		return nil
 	}
 	if selection.Project == nil {
@@ -201,6 +236,23 @@ func runRoot(cmd *cobra.Command, opts *rootOptions) error {
 
 	fmt.Fprintf(cmd.OutOrStdout(), "Switched to %s\n", result.Project.Code)
 	return nil
+}
+
+func currentProjectForPicker(paths config.Paths, cfg config.Config) (string, error) {
+	state, err := config.LoadState(paths.StateFile)
+	if err != nil {
+		if errors.Is(err, config.ErrNotFound) {
+			return config.UnsetProjectCode, nil
+		}
+		return "", err
+	}
+	if state.CurrentProject == "" || state.CurrentProject == config.UnsetProjectCode {
+		return config.UnsetProjectCode, nil
+	}
+	if _, ok := cfg.FindProject(state.CurrentProject); !ok {
+		return "", fmt.Errorf("current project %q is not in config; run `octx doctor` or choose unset after fixing state", state.CurrentProject)
+	}
+	return state.CurrentProject, nil
 }
 
 func friendlyConfigError(err error, path string) error {

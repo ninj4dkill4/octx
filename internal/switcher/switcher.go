@@ -67,7 +67,11 @@ func Clear(opts Options) (ClearResult, error) {
 	if err != nil {
 		return ClearResult{}, err
 	}
-	if err := os.Remove(config.ExpandPath(paths.StateFile)); err != nil && !os.IsNotExist(err) {
+	state := config.State{
+		CurrentProject: config.UnsetProjectCode,
+		SwitchedAt:     time.Now(),
+	}
+	if err := config.SaveState(paths.StateFile, state); err != nil {
 		return ClearResult{}, err
 	}
 	if err := os.Remove(config.ExpandPath(paths.SSHCurrent)); err != nil && !os.IsNotExist(err) {

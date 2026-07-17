@@ -28,6 +28,35 @@ projects:
 	}
 }
 
+func TestRunAcceptsUnsetState(t *testing.T) {
+	dir := t.TempDir()
+	configFile := writeConfig(t, dir, `
+projects:
+  - code: core
+`)
+	if err := config.SaveState(filepath.Join(dir, "state.yaml"), config.State{CurrentProject: config.UnsetProjectCode}); err != nil {
+		t.Fatal(err)
+	}
+
+	report := Run(Options{
+		Paths: testPaths(dir, configFile),
+		Env:   testEnv(dir),
+	})
+
+	assertContains(t, report, OK, "state", "current project is unset")
+	if report.HasErrors() {
+		t.Fatalf("doctor should not fail on unset state: %#v", report.Results)
+	}
+	for _, result := range report.Results {
+		if result.Check == "env" {
+			t.Fatalf("env checks should be skipped for unset state: %#v", report.Results)
+		}
+		if result.Check == "state" && strings.Contains(result.Message, "not in config") {
+			t.Fatalf("unset state should not be treated as missing project: %#v", report.Results)
+		}
+	}
+}
+
 func TestRunSkipsDependentChecksWhenConfigMissing(t *testing.T) {
 	dir := t.TempDir()
 	if err := config.SaveState(filepath.Join(dir, "state.yaml"), config.State{CurrentProject: "old"}); err != nil {
@@ -60,9 +89,95 @@ projects:
 		Env:   testEnv(dir),
 	})
 
-	assertLevel(t, report, Warn, "ssh")
+	assertProjectContains(t, report, Warn, "core", "ssh", "ssh_config")
+	assertContains(t, report, Error, "ssh", ".ssh/config not found")
+}
+
+func TestRunValidatesSSHInclude(t *testing.T) {
+	dir := t.TempDir()
+	sshConfig := filepath.Join(dir, "core-ssh")
+	if err := os.WriteFile(sshConfig, []byte("Host core\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	configFile := writeConfig(t, dir, `
+projects:
+  - code: core
+    ssh_config: `+sshConfig+`
+`)
+	writeSSHConfig(t, dir, "Include "+filepath.Join(dir, "ssh-current")+"\n")
+
+	report := Run(Options{
+		Paths: testPaths(dir, configFile),
+		Env:   testEnv(dir),
+	})
+
+	assertContains(t, report, OK, "ssh", ".ssh/config")
 	if report.HasErrors() {
-		t.Fatalf("doctor should not fail on missing optional ssh_config: %#v", report.Results)
+		t.Fatalf("doctor should pass when ssh-current is included: %#v", report.Results)
+	}
+}
+
+func TestRunErrorsWhenSSHIncludeMissing(t *testing.T) {
+	dir := t.TempDir()
+	sshConfig := filepath.Join(dir, "core-ssh")
+	if err := os.WriteFile(sshConfig, []byte("Host core\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	configFile := writeConfig(t, dir, `
+projects:
+  - code: core
+    ssh_config: `+sshConfig+`
+`)
+	writeSSHConfig(t, dir, "Host *\n  ServerAliveInterval 30\n")
+
+	report := Run(Options{
+		Paths: testPaths(dir, configFile),
+		Env:   testEnv(dir),
+	})
+
+	assertContains(t, report, Error, "ssh", "must include")
+	if !report.HasErrors() {
+		t.Fatalf("doctor should fail when ssh-current include is missing: %#v", report.Results)
+	}
+}
+
+func TestRunErrorsWhenSSHIncludeIsCommented(t *testing.T) {
+	dir := t.TempDir()
+	sshConfig := filepath.Join(dir, "core-ssh")
+	if err := os.WriteFile(sshConfig, []byte("Host core\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	configFile := writeConfig(t, dir, `
+projects:
+  - code: core
+    ssh_config: `+sshConfig+`
+`)
+	writeSSHConfig(t, dir, "# Include "+filepath.Join(dir, "ssh-current")+"\n")
+
+	report := Run(Options{
+		Paths: testPaths(dir, configFile),
+		Env:   testEnv(dir),
+	})
+
+	assertContains(t, report, Error, "ssh", "must include")
+}
+
+func TestRunDoesNotRequireSSHIncludeWithoutSSHConfigs(t *testing.T) {
+	dir := t.TempDir()
+	configFile := writeConfig(t, dir, `
+projects:
+  - code: core
+`)
+
+	report := Run(Options{
+		Paths: testPaths(dir, configFile),
+		Env:   testEnv(dir),
+	})
+
+	for _, result := range report.Results {
+		if result.Check == "ssh" && result.Level == Error {
+			t.Fatalf("ssh include should not be required without project ssh_config: %#v", report.Results)
+		}
 	}
 }
 
@@ -83,7 +198,7 @@ projects:
 		Env:   testEnv(dir),
 	})
 
-	assertContains(t, report, OK, "kube", "project core kubeconfig exists")
+	assertProjectContains(t, report, OK, "core", "kube", "kubeconfig exists")
 }
 
 func TestRunWarnsOnMissingKubeconfig(t *testing.T) {
@@ -189,9 +304,9 @@ projects:
 		},
 	})
 
-	assertContains(t, report, OK, "aws", `profile "core-devops" exists`)
-	assertContains(t, report, OK, "aliyun", `profile "core-aliyun" exists`)
-	assertContains(t, report, OK, "codex", `profile "core" exists`)
+	assertProjectContains(t, report, OK, "core", "aws", `profile "core-devops" exists`)
+	assertProjectContains(t, report, OK, "core", "aliyun", `profile "core-aliyun" exists`)
+	assertProjectContains(t, report, OK, "core", "codex", `profile "core" exists`)
 	if report.HasErrors() {
 		t.Fatalf("doctor should pass: %#v", report.Results)
 	}
@@ -218,9 +333,9 @@ projects:
 		},
 	})
 
-	assertContains(t, report, Warn, "aws", `profile "core-devops" not found`)
-	assertContains(t, report, Warn, "aliyun", `profile "core-aliyun" not found`)
-	assertContains(t, report, Warn, "codex", `profile "core" file not found`)
+	assertProjectContains(t, report, Warn, "core", "aws", `profile "core-devops" not found`)
+	assertProjectContains(t, report, Warn, "core", "aliyun", `profile "core-aliyun" not found`)
+	assertProjectContains(t, report, Warn, "core", "codex", `profile "core" file not found`)
 	if report.HasErrors() {
 		t.Fatalf("doctor should not fail on missing optional external profiles: %#v", report.Results)
 	}
@@ -271,6 +386,17 @@ func writeConfig(t *testing.T, dir, content string) string {
 	return path
 }
 
+func writeSSHConfig(t *testing.T, dir, content string) {
+	t.Helper()
+	path := filepath.Join(dir, ".ssh", "config")
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func assertLevel(t *testing.T, report Report, level Level, check string) {
 	t.Helper()
 	for _, result := range report.Results {
@@ -289,4 +415,14 @@ func assertContains(t *testing.T, report Report, level Level, check, message str
 		}
 	}
 	t.Fatalf("missing %s %s %q in %#v", level, check, message, report.Results)
+}
+
+func assertProjectContains(t *testing.T, report Report, level Level, project, check, message string) {
+	t.Helper()
+	for _, result := range report.Results {
+		if result.Level == level && result.Project == project && result.Check == check && strings.Contains(result.Message, message) {
+			return
+		}
+	}
+	t.Fatalf("missing %s [%s] %s %q in %#v", level, project, check, message, report.Results)
 }

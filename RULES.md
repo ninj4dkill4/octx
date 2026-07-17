@@ -24,7 +24,11 @@ Do not leave provider lists stale. Current switched context types are:
 
 All switched context integrations are optional. Doctor may warn about missing optional profiles, CLIs, SSH config files, or kubeconfig files, but it must not treat those as errors or exit non-zero for them.
 
-The picker must keep an `unset profiles` option. Selecting it clears all `octx`-managed environment variables, removes saved current state, and removes the generated SSH include target. The default picker cursor must prefer the saved current project, then the first configured project, and only default to `unset profiles` when there are no projects.
+When any project declares `ssh_config`, doctor must fail with `ERROR` if `~/.ssh/config` does not include the generated `ssh-current` path.
+
+Doctor output must be grouped by `[global]` and project sections. New profile-specific checks must emit scoped project results instead of flat global rows.
+
+The picker must keep an `unset` option at the bottom of the list. Selecting it clears all `octx`-managed environment variables, saves current state as `unset`, and removes the generated SSH include target. The default picker cursor must prefer saved state: `unset` selects the bottom option, a project code selects that project, missing state selects `unset`, and unknown state returns an error instead of guessing.
 
 Prefer neutral project wording in summaries and repository metadata, such as:
 
