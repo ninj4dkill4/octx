@@ -162,7 +162,7 @@ func (m model) View() string {
 		cursor := " "
 		name := renderProjectName(project, false)
 		if i == m.cursor {
-			cursor = cursorStyle.Render("›")
+			cursor = cursorStyle.Render("❯")
 			name = renderProjectName(project, true)
 		}
 		fmt.Fprintf(&b, "%s %s\n", cursor, name)
@@ -171,7 +171,7 @@ func (m model) View() string {
 	clearName := config.UnsetProjectCode
 	clearCursor := " "
 	if m.cursor == len(m.projects) {
-		clearCursor = cursorStyle.Render("›")
+		clearCursor = cursorStyle.Render("❯")
 		clearName = selectedStyle.Render(clearName)
 	}
 	fmt.Fprintf(&b, "%s %s\n", clearCursor, clearName)

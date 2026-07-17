@@ -25,6 +25,9 @@ func TestViewShowsUnsetProfilesOption(t *testing.T) {
 	if !strings.Contains(view, "Use arrow keys") {
 		t.Fatalf("view missing arrow key hint: %s", view)
 	}
+	if !strings.Contains(view, "❯") {
+		t.Fatalf("view missing selected cursor: %s", view)
+	}
 	if strings.Index(view, "core") > strings.Index(view, "unset") {
 		t.Fatalf("unset option should be below project options: %s", view)
 	}
