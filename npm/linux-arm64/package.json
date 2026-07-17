@@ -1,6 +1,6 @@
 {
   "name": "@ninj4dkill4/octx-linux-arm64",
-  "version": "0.1.17",
+  "version": "0.1.18",
   "description": "Linux arm64 binary for octx.",
   "license": "MIT",
   "os": [

@@ -93,6 +93,7 @@ func writeDoctorReport(out io.Writer, report doctor.Report) {
 	var global []doctor.Result
 	projectOrder := make([]string, 0)
 	projectResults := make(map[string][]doctor.Result)
+	projectColors := make(map[string]string)
 	for _, result := range report.Results {
 		if result.Project == "" {
 			global = append(global, result)
@@ -100,6 +101,9 @@ func writeDoctorReport(out io.Writer, report doctor.Report) {
 		}
 		if _, ok := projectResults[result.Project]; !ok {
 			projectOrder = append(projectOrder, result.Project)
+		}
+		if result.Color != "" {
+			projectColors[result.Project] = result.Color
 		}
 		projectResults[result.Project] = append(projectResults[result.Project], result)
 	}
@@ -112,7 +116,7 @@ func writeDoctorReport(out io.Writer, report doctor.Report) {
 		if wroteSection {
 			fmt.Fprintln(out)
 		}
-		fmt.Fprintf(out, "[%s]\n", name)
+		fmt.Fprintf(out, "[%s]\n", colorizeProjectName(name, projectColors[name]))
 		for _, result := range results {
 			fmt.Fprintf(out, "%-5s %-8s %s\n", result.Level, result.Check, result.Message)
 		}
@@ -123,6 +127,14 @@ func writeDoctorReport(out io.Writer, report doctor.Report) {
 	for _, project := range projectOrder {
 		writeSection(project, projectResults[project])
 	}
+}
+
+func colorizeProjectName(name, color string) string {
+	r, g, b, ok := config.ParseHexColor(color)
+	if !ok {
+		return name
+	}
+	return fmt.Sprintf("\x1b[38;2;%d;%d;%dm%s\x1b[0m", r, g, b, name)
 }
 
 func newVersionCommand() *cobra.Command {

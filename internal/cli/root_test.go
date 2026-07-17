@@ -83,10 +83,10 @@ func TestCurrentCommandWithoutShellEnv(t *testing.T) {
 func TestWriteDoctorReportGroupsByProject(t *testing.T) {
 	report := doctor.Report{Results: []doctor.Result{
 		{Level: doctor.OK, Check: "config", Message: "loaded config"},
-		{Level: doctor.OK, Project: "core", Check: "aws", Message: `profile "core" exists`},
+		{Level: doctor.OK, Project: "core", Color: "#22c55e", Check: "aws", Message: `profile "core" exists`},
 		{Level: doctor.Warn, Project: "pay", Check: "kube", Message: "kubeconfig missing"},
 		{Level: doctor.OK, Check: "binary", Message: "running octx"},
-		{Level: doctor.OK, Project: "core", Check: "ssh", Message: "ssh_config exists"},
+		{Level: doctor.OK, Project: "core", Color: "#22c55e", Check: "ssh", Message: "ssh_config exists"},
 	}}
 
 	var out bytes.Buffer
@@ -97,7 +97,7 @@ func TestWriteDoctorReportGroupsByProject(t *testing.T) {
 		"[global]\n",
 		"OK    config   loaded config\n",
 		"OK    binary   running octx\n",
-		"[core]\n",
+		"[\x1b[38;2;34;197;94mcore\x1b[0m]\n",
 		"OK    aws      profile \"core\" exists\n",
 		"OK    ssh      ssh_config exists\n",
 		"[pay]\n",
@@ -108,10 +108,10 @@ func TestWriteDoctorReportGroupsByProject(t *testing.T) {
 		}
 	}
 
-	if strings.Index(output, "[global]") > strings.Index(output, "[core]") {
+	if strings.Index(output, "[global]") > strings.Index(output, "core") {
 		t.Fatalf("global section should be first:\n%s", output)
 	}
-	if strings.Index(output, "[core]") > strings.Index(output, "[pay]") {
+	if strings.Index(output, "core") > strings.Index(output, "[pay]") {
 		t.Fatalf("project sections should keep first-seen order:\n%s", output)
 	}
 }

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 
 	"gopkg.in/yaml.v3"
 )
@@ -22,6 +23,7 @@ type Config struct {
 type Project struct {
 	Code           string `yaml:"code"`
 	Name           string `yaml:"name"`
+	Color          string `yaml:"color"`
 	AWSProfile     string `yaml:"aws_profile"`
 	CodexProfile   string `yaml:"codex_profile"`
 	AliyunProfile  string `yaml:"aliyun_profile"`
@@ -78,6 +80,11 @@ func (c Config) Validate() error {
 		if _, ok := seen[project.Code]; ok {
 			return fmt.Errorf("duplicate project code %q", project.Code)
 		}
+		if project.Color != "" {
+			if _, _, _, ok := ParseHexColor(project.Color); !ok {
+				return fmt.Errorf("projects[%d].color must be #RGB or #RRGGBB", i)
+			}
+		}
 		seen[project.Code] = struct{}{}
 	}
 	return nil
@@ -96,6 +103,7 @@ func WriteSampleConfig(path string) error {
 	return writeFile(path, []byte(`projects:
 - code: core
   name: Core Platform
+  color: "#22c55e"
   aws_profile: core-devops
   aliyun_profile: core-devops
   codex_profile: core
@@ -106,6 +114,7 @@ func WriteSampleConfig(path string) error {
 
 - code: pay
   name: Payment
+  color: "#3b82f6"
   aws_profile: payment-devops
   aliyun_profile: payment-devops
   codex_profile: payment
@@ -118,6 +127,48 @@ func WriteSampleConfig(path string) error {
 
 func ExpandPath(path string) string {
 	return expandHome(path)
+}
+
+func ParseHexColor(value string) (uint8, uint8, uint8, bool) {
+	if len(value) == 4 && value[0] == '#' {
+		r, ok := parseHexByte(string([]byte{value[1], value[1]}))
+		if !ok {
+			return 0, 0, 0, false
+		}
+		g, ok := parseHexByte(string([]byte{value[2], value[2]}))
+		if !ok {
+			return 0, 0, 0, false
+		}
+		b, ok := parseHexByte(string([]byte{value[3], value[3]}))
+		if !ok {
+			return 0, 0, 0, false
+		}
+		return r, g, b, true
+	}
+	if len(value) == 7 && value[0] == '#' {
+		r, ok := parseHexByte(value[1:3])
+		if !ok {
+			return 0, 0, 0, false
+		}
+		g, ok := parseHexByte(value[3:5])
+		if !ok {
+			return 0, 0, 0, false
+		}
+		b, ok := parseHexByte(value[5:7])
+		if !ok {
+			return 0, 0, 0, false
+		}
+		return r, g, b, true
+	}
+	return 0, 0, 0, false
+}
+
+func parseHexByte(value string) (uint8, bool) {
+	parsed, err := strconv.ParseUint(value, 16, 8)
+	if err != nil {
+		return 0, false
+	}
+	return uint8(parsed), true
 }
 
 func writeFile(path string, data []byte, perm os.FileMode) error {

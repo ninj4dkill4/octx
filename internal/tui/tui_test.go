@@ -5,6 +5,8 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
+	"github.com/muesli/termenv"
 	"github.com/ninj4dkill4/octx/internal/config"
 )
 
@@ -20,8 +22,30 @@ func TestViewShowsUnsetProfilesOption(t *testing.T) {
 	if !strings.Contains(view, "unset") {
 		t.Fatalf("view missing unset option: %s", view)
 	}
+	if !strings.Contains(view, "Use arrow keys") {
+		t.Fatalf("view missing arrow key hint: %s", view)
+	}
 	if strings.Index(view, "core") > strings.Index(view, "unset") {
 		t.Fatalf("unset option should be below project options: %s", view)
+	}
+}
+
+func TestRenderProjectNameUsesProjectColor(t *testing.T) {
+	lipgloss.SetColorProfile(termenv.TrueColor)
+
+	rendered := renderProjectName(config.Project{Code: "core", Color: "#22c55e"}, false)
+	if !strings.Contains(rendered, "\x1b[") {
+		t.Fatalf("expected colored output, got %q", rendered)
+	}
+	if !strings.Contains(rendered, "core") {
+		t.Fatalf("expected project code in output, got %q", rendered)
+	}
+}
+
+func TestRenderProjectNameKeepsDefaultWithoutColor(t *testing.T) {
+	rendered := renderProjectName(config.Project{Code: "core"}, false)
+	if rendered != "core" {
+		t.Fatalf("rendered = %q, want core", rendered)
 	}
 }
 

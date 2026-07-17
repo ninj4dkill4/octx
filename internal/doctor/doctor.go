@@ -24,6 +24,7 @@ const (
 type Result struct {
 	Level   Level
 	Project string
+	Color   string
 	Check   string
 	Message string
 }
@@ -90,9 +91,14 @@ func (c *checker) add(level Level, check, message string) {
 }
 
 func (c *checker) addProject(level Level, project, check, message string) {
+	color := ""
+	if configured, ok := c.cfg.FindProject(project); ok {
+		color = configured.Color
+	}
 	c.results = append(c.results, Result{
 		Level:   level,
 		Project: project,
+		Color:   color,
 		Check:   check,
 		Message: message,
 	})

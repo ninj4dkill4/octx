@@ -22,6 +22,7 @@
 
 - Fast project picker in the terminal.
 - Picker option to unset the active profiles.
+- Optional project colors in the picker and doctor output.
 - Exports `OPSCTX_PROJECT`.
 - Exports or unsets `AWS_PROFILE`, `ALIBABA_CLOUD_PROFILE`, `CODEX_PROFILE`, `CLOUDSDK_ACTIVE_CONFIG_NAME`, `AZURE_CONFIG_DIR`, `KUBECONFIG`, and `OCTX_SSH_CONFIG`.
 - Keeps each terminal shell isolated; switching in one shell does not change another shell.
@@ -106,6 +107,7 @@ Example:
 projects:
 - code: core
   name: Core Platform
+  color: "#22c55e"
   aws_profile: core-devops
   aliyun_profile: core-devops
   codex_profile: core
@@ -116,6 +118,7 @@ projects:
 
 - code: pay
   name: Payment
+  color: "#3b82f6"
   aws_profile: payment-devops
   aliyun_profile: payment-devops
   codex_profile: payment
@@ -125,7 +128,7 @@ projects:
   ssh_config: ~/.ssh/config.d/payment
 ```
 
-Only `code` is required. `aws_profile`, `aliyun_profile`, `codex_profile`, `gcloud_config`, `azure_config_dir`, `kubeconfig`, and `ssh_config` are optional. If an optional profile is omitted, `octx` unsets the matching environment variable during switch. If `ssh_config` is omitted, `octx` unsets `OCTX_SSH_CONFIG`.
+Only `code` is required. `color`, `aws_profile`, `aliyun_profile`, `codex_profile`, `gcloud_config`, `azure_config_dir`, `kubeconfig`, and `ssh_config` are optional. `color` accepts `#RGB` or `#RRGGBB` and is used only for display in the picker and doctor output. If an optional profile is omitted, `octx` unsets the matching environment variable during switch. If `ssh_config` is omitted, `octx` unsets `OCTX_SSH_CONFIG`.
 
 Remove the legacy include from `~/.ssh/config` if it exists:
 

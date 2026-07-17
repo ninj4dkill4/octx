@@ -156,14 +156,14 @@ func (m model) View() string {
 
 	var b strings.Builder
 	fmt.Fprintln(&b, titleStyle.Render("Project Context Switcher"))
-	fmt.Fprintln(&b, promptStyle.Render("?")+" Choose a profile")
+	fmt.Fprintln(&b, promptStyle.Render("?")+" Choose a profile "+lipgloss.NewStyle().Foreground(lipgloss.Color("8")).Render("(Use arrow keys)"))
 
 	for i, project := range m.projects {
 		cursor := " "
-		name := project.Code
+		name := renderProjectName(project, false)
 		if i == m.cursor {
 			cursor = cursorStyle.Render("›")
-			name = selectedStyle.Render(name)
+			name = renderProjectName(project, true)
 		}
 		fmt.Fprintf(&b, "%s %s\n", cursor, name)
 	}
@@ -181,4 +181,22 @@ func (m model) View() string {
 	}
 
 	return b.String()
+}
+
+func renderProjectName(project config.Project, selected bool) string {
+	style := lipgloss.NewStyle()
+	_, _, _, hasColor := config.ParseHexColor(project.Color)
+	if hasColor {
+		style = style.Foreground(lipgloss.Color(project.Color))
+	}
+	if selected {
+		style = style.Bold(true)
+		if !hasColor {
+			style = selectedStyle
+		}
+	}
+	if !hasColor && !selected {
+		return project.Code
+	}
+	return style.Render(project.Code)
 }

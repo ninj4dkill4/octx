@@ -1,6 +1,6 @@
 {
   "name": "@ninj4dkill4/octx",
-  "version": "0.1.17",
+  "version": "0.1.18",
   "description": "Switch ops profiles for Codex workflows from the terminal.",
   "license": "MIT",
   "type": "module",
@@ -18,10 +18,10 @@
     "publish:npm": "node scripts/publish-npm.mjs"
   },
   "optionalDependencies": {
-    "@ninj4dkill4/octx-darwin-arm64": "0.1.17",
-    "@ninj4dkill4/octx-darwin-x64": "0.1.17",
-    "@ninj4dkill4/octx-linux-arm64": "0.1.17",
-    "@ninj4dkill4/octx-linux-x64": "0.1.17"
+    "@ninj4dkill4/octx-darwin-arm64": "0.1.18",
+    "@ninj4dkill4/octx-darwin-x64": "0.1.18",
+    "@ninj4dkill4/octx-linux-arm64": "0.1.18",
+    "@ninj4dkill4/octx-linux-x64": "0.1.18"
   },
   "engines": {
     "node": ">=18"

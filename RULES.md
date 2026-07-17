@@ -14,6 +14,8 @@ When changing any switched context type, profile field, environment variable, co
 - Version output and build-time version injection when release behavior changes.
 - GitHub Release notes for the published tag.
 
+Project display fields such as `color` are optional unless explicitly stated otherwise. Missing display fields must keep default terminal styling and must not trigger doctor warnings.
+
 Do not leave provider lists stale. Current switched context types are:
 
 - AWS profile via `AWS_PROFILE`.
