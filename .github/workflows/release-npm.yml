@@ -6,7 +6,7 @@ on:
       - "v*.*.*"
 
 permissions:
-  contents: read
+  contents: write
   id-token: write
 
 jobs:
@@ -46,3 +46,48 @@ jobs:
 
       - name: Publish to npm
         run: node scripts/publish-npm.mjs
+
+      - name: Verify npm version
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          for attempt in 1 2 3 4 5; do
+            published="$(npm view @ninj4dkill4/octx version 2>/dev/null || true)"
+            if [ "$published" = "$version" ]; then
+              exit 0
+            fi
+            echo "npm latest is ${published:-unavailable}, want $version; retry $attempt/5"
+            sleep 10
+          done
+          echo "npm latest did not become $version"
+          exit 1
+
+      - name: Smoke test npm install
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          tmp="$(mktemp -d)"
+          for attempt in 1 2 3 4 5; do
+            if npm install -g --prefix "$tmp" --include=optional "@ninj4dkill4/octx@$version"; then
+              break
+            fi
+            echo "npm install failed; retry $attempt/5"
+            sleep 10
+          done
+          "$tmp/bin/octx" --help
+          installed="$("$tmp/bin/octx" version)"
+          if [ "$installed" != "$version" ]; then
+            echo "installed octx version $installed, want $version"
+            exit 1
+          fi
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            echo "GitHub Release $GITHUB_REF_NAME already exists"
+            exit 0
+          fi
+          gh release create "$GITHUB_REF_NAME" \
+            --verify-tag \
+            --title "$GITHUB_REF_NAME" \
+            --generate-notes

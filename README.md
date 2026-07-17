@@ -254,7 +254,7 @@ git tag vX.Y.Z
 git push origin vX.Y.Z
 ```
 
-The workflow builds native binaries, prepares package manifests from the tag version, runs dry-run packs, and publishes to npm.
+The workflow builds native binaries, prepares package manifests from the tag version, runs dry-run packs, publishes to npm, verifies the npm version, smoke tests installing the exact tag version, and creates the GitHub Release.
 
 ## Roadmap
 

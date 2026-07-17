@@ -68,26 +68,11 @@ Before tagging a release:
 
 5. Commit and push `main`.
 6. Push the matching semver tag, for example `v0.1.7`.
-7. Wait for the `Release npm` workflow to pass.
-8. Verify npm latest:
+7. Wait for the `Release npm` workflow to pass. The workflow publishes npm packages, verifies the npm version, smoke tests installing the exact tag version, and creates the GitHub Release.
+8. If README changed and npm web looks stale, verify registry readme directly:
 
    ```sh
-   npm view @ninj4dkill4/octx version
-   ```
-
-9. Create the GitHub Release for the tag.
-10. Smoke test from npm:
-
-   ```sh
-   tmp=$(mktemp -d)
-   npm install -g --prefix "$tmp" @ninj4dkill4/octx@latest
-   "$tmp/bin/octx" --help
-   ```
-
-11. If README changed and npm web looks stale, verify registry readme directly:
-
-    ```sh
-    npm view @ninj4dkill4/octx readme
+   npm view @ninj4dkill4/octx readme
     ```
 
 ## Shell Cache Note
